@@ -74,6 +74,7 @@ export interface Details {
   overview: string;
   poster: string | null;
   genres: string[];
+  genreIds: number[];
   runtime: number | null; // minutes (movie) or typical episode length (tv)
   seasons: number | null;
   imdbId: string | null;
@@ -151,14 +152,14 @@ export async function getRelated(type: MediaType, id: number) {
 
 export async function discover(
   type: MediaType,
-  opts: { region: string; providers: number[]; genreIds: number[]; minYear?: number; page?: number },
+  opts: { region: string; providers: number[]; genreIds?: number[]; minYear?: number; page?: number },
 ) {
   const dateKey = type === "movie" ? "primary_release_date.gte" : "first_air_date.gte";
   const data = await tmdb<{ results: TmdbListItem[] }>(`/discover/${type}`, {
     watch_region: opts.region,
     with_watch_providers: opts.providers.join("|"),
     with_watch_monetization_types: "flatrate|free|ads",
-    with_genres: opts.genreIds.length ? opts.genreIds.join("|") : undefined,
+    with_genres: opts.genreIds?.length ? opts.genreIds.join("|") : undefined,
     [dateKey]: opts.minYear ? `${opts.minYear}-01-01` : undefined,
     sort_by: "vote_average.desc",
     "vote_count.gte": type === "movie" ? 400 : 150,
@@ -216,6 +217,7 @@ export async function getDetails(type: MediaType, id: number, region: string): P
     overview: d.overview,
     poster: d.poster_path ? `${IMG}/w342${d.poster_path}` : null,
     genres: d.genres.map((g) => g.name),
+    genreIds: d.genres.map((g) => g.id),
     runtime: type === "movie" ? d.runtime || null : d.episode_run_time?.[0] ?? null,
     seasons: type === "tv" ? d.number_of_seasons ?? null : null,
     imdbId: d.imdb_id || d.external_ids?.imdb_id || null,

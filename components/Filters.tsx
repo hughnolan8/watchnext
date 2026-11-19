@@ -1,16 +1,14 @@
 "use client";
 
+import type { FilterState, SortKey } from "@/lib/filter";
 import { GENRES, MOODS } from "@/lib/genres";
-import type { TypeFilter } from "@/lib/types";
 
-export interface FilterState {
-  type: TypeFilter;
-  genres: string[];
-  minYear: number | null;
-  maxRuntime: number | null;
-}
-
-export const DEFAULT_FILTERS: FilterState = { type: "all", genres: [], minYear: null, maxRuntime: null };
+const SORTS: [SortKey, string][] = [
+  ["score", "Best match"],
+  ["imdb", "IMDb rating"],
+  ["letterboxd", "Letterboxd rating"],
+  ["year", "Newest"],
+];
 
 const YEARS = [2024, 2020, 2015, 2010, 2000, 1990, 1980];
 const RUNTIMES = [30, 60, 90, 120, 150];
@@ -87,6 +85,20 @@ export function Filters({ value, onChange }: { value: FilterState; onChange: (f:
             {RUNTIMES.map((r) => (
               <option key={r} value={r}>
                 {r} min
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-sm text-muted">
+          Sort by
+          <select
+            value={value.sort}
+            onChange={(e) => set({ sort: e.target.value as SortKey })}
+            className="rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-fg"
+          >
+            {SORTS.map(([k, label]) => (
+              <option key={k} value={k}>
+                {label}
               </option>
             ))}
           </select>

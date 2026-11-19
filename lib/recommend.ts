@@ -1,13 +1,13 @@
 import "server-only";
-import { genreIdsFor } from "./genres";
 import { getImdbRating } from "./omdb";
 import { getLetterboxdRating } from "./letterboxd";
-import { discover, getDetails, getRelated, yearOf, type Details, type TmdbListItem } from "./tmdb";
+import { discover, getDetails, getRelated, type Details, type TmdbListItem } from "./tmdb";
 import type { MediaType, RecommendRequest, RecommendResponse, Suggestion } from "./types";
 
-const DETAIL_POOL = 60; // candidates we check availability for
-const RATED_POOL = 30; // available titles we fetch IMDb/Letterboxd ratings for
-const MAX_RESULTS = 24;
+// The browser stores this pool and filters it locally, so it's deliberately broad.
+const SEED_POOL = 80; // candidates from your favourites we check availability for
+const DISCOVER_POOL = 40; // plus this many "best rated on your services" titles
+const RATED_POOL = 70; // available titles we fetch IMDb/Letterboxd ratings for
 
 interface Candidate {
   key: string;
@@ -15,29 +15,24 @@ interface Candidate {
   item: TmdbListItem;
   affinity: number; // how strongly the seeds point at this title
   likedBy: Set<string>; // seed titles that led here
-  fromDiscover: boolean;
 }
 
 export async function recommend(req: RecommendRequest): Promise<RecommendResponse> {
   const warnings: string[] = [];
   const excluded = new Set(req.exclude);
   for (const s of req.seeds) excluded.add(`${s.type}:${s.id}`);
-  const wantType = (t: MediaType) => req.type === "all" || req.type === t;
 
   const candidates = new Map<string, Candidate>();
   const add = (type: MediaType, item: TmdbListItem, weight: number, seedTitle: string | null) => {
     const key = `${type}:${item.id}`;
-    if (excluded.has(key)) return;
+    if (excluded.has(key) || item.vote_count < 30) return;
     let c = candidates.get(key);
     if (!c) {
-      c = { key, type, item, affinity: 0, likedBy: new Set(), fromDiscover: seedTitle === null };
+      c = { key, type, item, affinity: 0, likedBy: new Set() };
       candidates.set(key, c);
     }
     c.affinity += weight;
-    if (seedTitle) {
-      c.likedBy.add(seedTitle);
-      c.fromDiscover = false;
-    }
+    if (seedTitle) c.likedBy.add(seedTitle);
   };
 
   // 1. Gather candidates from the titles you love
@@ -50,51 +45,32 @@ export async function recommend(req: RecommendRequest): Promise<RecommendRespons
     similar.forEach((item, i) => add(seed.type, item, 0.5 - i / 80, seed.title));
   }
 
-  // 2. Filter on what we know from list results
-  const genreMatch = (c: Candidate) => {
-    if (!req.genres.length) return true;
-    const ids = genreIdsFor(req.genres, c.type);
-    return c.item.genre_ids?.some((g) => ids.includes(g)) ?? false;
-  };
-  const passes = (c: Candidate) => {
-    if (!wantType(c.type)) return false;
-    if (c.item.vote_count < 30) return false;
-    if (req.minYear) {
-      const y = yearOf(c.item.release_date ?? c.item.first_air_date);
-      if (!y || y < req.minYear) return false;
-    }
-    return genreMatch(c);
-  };
-  let pool = [...candidates.values()].filter(passes);
-
-  // 3. Top up from "best rated on your services" if seeds are missing or thin
-  if (pool.length < 25) {
-    const types = (["movie", "tv"] as const).filter(wantType);
-    const pages = req.seeds.length ? [1] : [1, 2];
-    const found = await Promise.all(
-      types.flatMap((type) =>
-        pages.map((page) =>
-          discover(type, {
-            region: req.region,
-            providers: req.providers,
-            genreIds: genreIdsFor(req.genres, type),
-            minYear: req.minYear ?? undefined,
-            page,
-          }).then((items) => items.map((item) => ({ type, item }))),
-        ),
+  // 2. Mix in the best-rated films and shows on your services, so the stored pool
+  //    has plenty of variety for filtering. (Discover results are already on your services.)
+  const pages = req.seeds.length ? [1, 2] : [1, 2, 3, 4];
+  const found = await Promise.all(
+    (["movie", "tv"] as const).flatMap((type) =>
+      pages.map((page) =>
+        discover(type, { region: req.region, providers: req.providers, page })
+          .then((items) => items.map((item) => ({ type, item })))
+          .catch(() => []),
       ),
-    );
-    for (const { type, item } of found.flat()) add(type, item, 0, null);
-    pool = [...candidates.values()].filter(passes);
-  }
+    ),
+  );
+  for (const { type, item } of found.flat()) add(type, item, 0, null);
 
-  // 4. Shortlist by a cheap preliminary score, then check real availability
+  // 3. Shortlist by a cheap preliminary score, then check real availability
+  const pool = [...candidates.values()];
   const maxAffinity = Math.max(1e-6, ...pool.map((c) => c.affinity));
   const pre = (c: Candidate) =>
     (req.seeds.length ? 0.6 * (c.affinity / maxAffinity) : 0) +
     0.4 * (c.item.vote_average / 10) * Math.min(1, Math.log10(c.item.vote_count + 1) / 3);
   pool.sort((a, b) => pre(b) - pre(a));
-  const shortlist = pool.slice(0, DETAIL_POOL);
+  const fromSeeds = pool.filter((c) => c.likedBy.size > 0).slice(0, SEED_POOL);
+  const fromDiscover = pool
+    .filter((c) => c.likedBy.size === 0)
+    .slice(0, req.seeds.length ? DISCOVER_POOL : SEED_POOL + DISCOVER_POOL);
+  const shortlist = [...fromSeeds, ...fromDiscover];
 
   const details = await mapLimit(shortlist, 8, (c) =>
     getDetails(c.type, c.item.id, req.region).catch(() => null),
@@ -103,16 +79,13 @@ export async function recommend(req: RecommendRequest): Promise<RecommendRespons
   const available: { c: Candidate; d: Details }[] = [];
   shortlist.forEach((c, i) => {
     const d = details[i];
-    if (!d) return;
-    if (!d.streaming.some((p) => mine.has(p.id))) return;
-    if (req.maxRuntime && d.runtime && d.runtime > req.maxRuntime) return;
-    available.push({ c, d });
+    if (d && d.streaming.some((p) => mine.has(p.id))) available.push({ c, d });
   });
 
-  // 5. Ratings for the best available titles
+  // 4. Ratings for the best available titles
   const rated = available.slice(0, RATED_POOL);
   if (!process.env.OMDB_API_KEY) warnings.push("OMDB_API_KEY is not set, so IMDb ratings are missing.");
-  const ratings = await mapLimit(rated, 5, async ({ d }) => {
+  const ratings = await mapLimit(rated, 6, async ({ d }) => {
     const [imdb, lb] = await Promise.all([
       getImdbRating(d.imdbId),
       d.type === "movie" ? getLetterboxdRating(d.id) : Promise.resolve(null),
@@ -120,7 +93,7 @@ export async function recommend(req: RecommendRequest): Promise<RecommendRespons
     return { imdb, lb };
   });
 
-  // 6. Blend and explain
+  // 5. Blend and explain
   const results: Suggestion[] = rated.map(({ c, d }, i) => {
     const { imdb, lb } = ratings[i];
     const parts: [number, number][] = []; // [score 0-100, weight]
@@ -148,6 +121,7 @@ export async function recommend(req: RecommendRequest): Promise<RecommendRespons
       overview: d.overview,
       poster: d.poster,
       genres: d.genres,
+      genreIds: d.genreIds,
       runtime: d.runtime,
       seasons: d.seasons,
       providers: providers.map(({ id, name, logo }) => ({ id, name, logo })),
@@ -169,7 +143,7 @@ export async function recommend(req: RecommendRequest): Promise<RecommendRespons
   });
 
   results.sort((a, b) => b.score - a.score);
-  return { results: results.slice(0, MAX_RESULTS), warnings };
+  return { results: results.filter((r) => r.score >= 50), warnings };
 }
 
 function listJoin(xs: string[]) {

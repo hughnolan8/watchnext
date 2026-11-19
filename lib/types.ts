@@ -17,14 +17,11 @@ export interface Seed {
   poster: string | null;
 }
 
+/** Filters are applied in the browser to stored results, so they're not part of the request. */
 export interface RecommendRequest {
   region: string;
   providers: number[];
   seeds: Pick<Seed, "id" | "type" | "title">[];
-  type: TypeFilter;
-  genres: string[];
-  minYear?: number | null;
-  maxRuntime?: number | null;
   exclude: string[]; // "movie:123" / "tv:456"
 }
 
@@ -43,6 +40,7 @@ export interface Suggestion {
   overview: string;
   poster: string | null;
   genres: string[];
+  genreIds: number[];
   runtime: number | null;
   seasons: number | null;
   providers: ProviderInfo[];

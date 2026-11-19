@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { applyFilters, DEFAULT_FILTERS, type FilterState } from "@/lib/filter";
 import { load, save } from "@/lib/storage";
 import type { ProviderInfo, RecommendResponse, Seed, Suggestion } from "@/lib/types";
-import { DEFAULT_FILTERS, Filters, type FilterState } from "./Filters";
+import { Filters } from "./Filters";
 import { SeedSearch } from "./SeedSearch";
 import { ServicePicker } from "./ServicePicker";
 import { TitleCard } from "./TitleCard";
@@ -12,6 +13,17 @@ interface Hidden {
   key: string;
   title: string;
 }
+
+/** Suggestions fetched once and kept in the browser; filters run over these locally. */
+interface Stored {
+  results: Suggestion[];
+  warnings: string[];
+  fetchedAt: number;
+  signature: string; // region + services + favourites used for this fetch
+}
+
+const signatureOf = (region: string, providers: number[], seeds: Seed[]) =>
+  JSON.stringify([region, [...providers].sort(), seeds.map((s) => `${s.type}:${s.id}`).sort()]);
 
 export function WatchNext({
   defaultRegion,
@@ -31,21 +43,21 @@ export function WatchNext({
   const [seeds, setSeeds] = useState<Seed[]>([]);
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [hidden, setHidden] = useState<Hidden[]>([]);
+  const [stored, setStored] = useState<Stored | null>(null);
 
-  const [results, setResults] = useState<Suggestion[] | null>(null);
-  const [warnings, setWarnings] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const selected = useMemo(() => selectedByRegion[region] ?? [], [selectedByRegion, region]);
 
-  // Load saved preferences once, after hydration
+  // Load saved preferences and suggestions once, after hydration
   useEffect(() => {
     setRegion(load("region", defaultRegion));
     setSelectedByRegion(load("services", {}));
     setSeeds(load("seeds", []));
     setFilters({ ...DEFAULT_FILTERS, ...load("filters", {}) });
     setHidden(load("hidden", []));
+    setStored(load<Stored | null>("results", null));
     setReady(true);
   }, [defaultRegion]);
 
@@ -56,7 +68,8 @@ export function WatchNext({
     save("seeds", seeds);
     save("filters", filters);
     save("hidden", hidden);
-  }, [ready, region, selectedByRegion, seeds, filters, hidden]);
+    save("results", stored);
+  }, [ready, region, selectedByRegion, seeds, filters, hidden, stored]);
 
   useEffect(() => {
     if (!hasTmdb) return;
@@ -82,7 +95,6 @@ export function WatchNext({
       })
       .catch(() => !cancelled && setError("Couldn't load streaming services for this region."))
       .finally(() => !cancelled && setProvidersLoading(false));
-    setResults(null);
     return () => {
       cancelled = true;
     };
@@ -98,7 +110,11 @@ export function WatchNext({
     setSeeds((prev) => (prev.some((p) => p.id === s.id && p.type === s.type) ? prev : [...prev, s].slice(-10)));
   const removeSeed = (s: Seed) => setSeeds((prev) => prev.filter((p) => !(p.id === s.id && p.type === s.type)));
 
-  const run = useCallback(async () => {
+  const signature = signatureOf(region, selected, seeds);
+  const stale = !!stored && stored.signature !== signature;
+
+  // The only network call for suggestions. Filters never trigger it.
+  const fetchSuggestions = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -109,7 +125,6 @@ export function WatchNext({
           region,
           providers: selected,
           seeds: seeds.map(({ id, type, title }) => ({ id, type, title })),
-          ...filters,
           exclude: hidden.map((h) => h.key),
         }),
       });
@@ -125,20 +140,25 @@ export function WatchNext({
         return;
       }
       const { results, warnings } = data as RecommendResponse;
-      setResults(results);
-      setWarnings(warnings);
+      setStored({ results, warnings, fetchedAt: Date.now(), signature: signatureOf(region, selected, seeds) });
       requestAnimationFrame(() => document.getElementById("results")?.scrollIntoView({ behavior: "smooth" }));
     } catch {
       setError("Network error. Is the dev server running?");
     } finally {
       setLoading(false);
     }
-  }, [region, selected, seeds, filters, hidden]);
+  }, [region, selected, seeds, hidden]);
 
-  const hide = (s: Suggestion) => {
-    setHidden((prev) => [...prev, { key: s.key, title: s.title }]);
-    setResults((prev) => prev?.filter((r) => r.key !== s.key) ?? null);
-  };
+  const hiddenKeys = useMemo(() => new Set(hidden.map((h) => h.key)), [hidden]);
+  const visible = useMemo(
+    () => (stored ? applyFilters(stored.results, filters, hiddenKeys) : []),
+    [stored, filters, hiddenKeys],
+  );
+  const unhiddenTotal = stored ? stored.results.filter((s) => !hiddenKeys.has(s.key)).length : 0;
+  const filtersActive =
+    filters.type !== "all" || filters.genres.length > 0 || filters.minYear != null || filters.maxRuntime != null;
+
+  const hide = (s: Suggestion) => setHidden((prev) => [...prev, { key: s.key, title: s.title }]);
   const loved = (s: Suggestion) => {
     addSeed({ id: s.id, type: s.type, title: s.title, year: s.year, poster: s.poster });
     hide(s);
@@ -198,27 +218,23 @@ export function WatchNext({
           <SeedSearch seeds={seeds} onAdd={addSeed} onRemove={removeSeed} />
         </Section>
 
-        <Section step="3" title="What are you in the mood for?">
-          <Filters value={filters} onChange={setFilters} />
-        </Section>
-
         <div className="flex flex-wrap items-center gap-4">
           <button
             type="button"
-            onClick={run}
+            onClick={fetchSuggestions}
             disabled={loading || !selected.length || !hasTmdb}
             className="rounded-full bg-accent px-7 py-3 font-semibold text-bg shadow-lg shadow-accent/20 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {loading ? "Finding picks…" : "Find something to watch"}
+            {loading ? "Finding picks…" : stored ? "Refresh suggestions" : "Get suggestions"}
           </button>
           {!selected.length && hasTmdb && <span className="text-sm text-muted">Pick at least one service.</span>}
-          {hidden.length > 0 && (
-            <span className="text-sm text-muted">
-              {hidden.length} hidden ·{" "}
-              <button type="button" onClick={() => setHidden([])} className="text-accent hover:underline">
-                show them again
-              </button>
+          {stale && !loading && (
+            <span className="text-sm text-accent">
+              Your region, services or favourites changed. Refresh to update.
             </span>
+          )}
+          {stored && !stale && !loading && (
+            <span className="text-sm text-muted">Saved {timeAgo(stored.fetchedAt)}</span>
           )}
         </div>
 
@@ -226,27 +242,54 @@ export function WatchNext({
       </div>
 
       <section id="results" className="scroll-mt-6 pt-10">
-        {loading && (
+        {loading && !stored && (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {Array.from({ length: 8 }, (_, i) => (
               <div key={i} className="aspect-[2/3] animate-pulse rounded-2xl bg-surface" />
             ))}
           </div>
         )}
-        {!loading && results && (
-          <>
-            <div className="mb-4 flex items-baseline justify-between">
+        {stored && (
+          <div className={loading ? "pointer-events-none opacity-50 transition" : "transition"}>
+            <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="font-display text-2xl font-semibold">Your picks</h2>
-              <span className="text-sm text-muted">{results.length} titles, best first</span>
+              <span className="text-sm text-muted">
+                {filtersActive || visible.length !== unhiddenTotal
+                  ? `${visible.length} of ${unhiddenTotal} match`
+                  : `${visible.length} titles`}
+                {hidden.length > 0 && (
+                  <>
+                    {" "}
+                    · {hidden.length} hidden ·{" "}
+                    <button type="button" onClick={() => setHidden([])} className="text-accent hover:underline">
+                      show again
+                    </button>
+                  </>
+                )}
+              </span>
             </div>
-            {warnings.map((w) => (
+
+            <div className="mb-6 rounded-2xl border border-line bg-surface p-5">
+              <Filters value={filters} onChange={setFilters} />
+              {filtersActive && (
+                <button
+                  type="button"
+                  onClick={() => setFilters({ ...DEFAULT_FILTERS, sort: filters.sort })}
+                  className="mt-4 text-sm text-accent hover:underline"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+
+            {stored.warnings.map((w) => (
               <p key={w} className="mb-3 text-sm text-muted">
                 {w}
               </p>
             ))}
-            {results.length ? (
+            {visible.length ? (
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-                {results.map((s) => (
+                {visible.map((s) => (
                   <TitleCard
                     key={s.key}
                     s={s}
@@ -258,10 +301,10 @@ export function WatchNext({
               </div>
             ) : (
               <p className="rounded-2xl border border-line bg-surface p-6 text-muted">
-                Nothing matched on your services. Try fewer genres, an earlier year, or add another service.
+                None of your saved picks match these filters. Loosen them, or refresh to fetch a new batch.
               </p>
             )}
-          </>
+          </div>
         )}
       </section>
 
@@ -271,6 +314,15 @@ export function WatchNext({
       </footer>
     </div>
   );
+}
+
+function timeAgo(ts: number) {
+  const mins = Math.round((Date.now() - ts) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs} h ago`;
+  return new Date(ts).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
 function Section({

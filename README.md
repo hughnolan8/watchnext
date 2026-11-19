@@ -23,10 +23,11 @@ Letterboxd needs no key. It has no public API, so the server reads the average r
 ## How suggestions work
 
 1. **Your services.** You pick your subscriptions for your region. Only subscription, free and ad-supported availability counts (not rent/buy). Data is from JustWatch via TMDB.
-2. **Candidates.** For each title you love, TMDB's *recommendations* and *similar* lists are collected. Titles that several of your favourites point to score higher. With no favourites (or too few matches), it tops up with the best-rated titles on your services.
-3. **Filters.** Films/shows, genres or a mood preset, earliest year, and max runtime (episode length for shows).
-4. **Availability check.** The top ~60 candidates are checked against your services in your region.
-5. **Ratings and score.** IMDb (OMDb) and Letterboxd ratings are fetched for the top 30. The score (0–100) is a weighted average of IMDb 40%, Letterboxd 40% and TMDB 20%, using whichever are available. With favourites, it's 65% rating and 35% how strongly your favourites point to the title.
+2. **Candidates.** For each title you love, TMDB's *recommendations* and *similar* lists are collected. Titles that several of your favourites point to score higher. The best-rated films and shows on your services are always mixed in too, so there's plenty of variety.
+3. **Availability check.** Up to ~120 candidates are checked against your services in your region.
+4. **Ratings and score.** IMDb (OMDb) and Letterboxd ratings are fetched for the top 70. The score (0–100) is a weighted average of IMDb 40%, Letterboxd 40% and TMDB 20%, using whichever are available. With favourites, it's 65% rating and 35% how strongly your favourites point to the title.
+
+**Fetch once, filter instantly.** "Get suggestions" is the only call that fetches suggestions. The results (usually 50–70 titles) are saved in your browser. Filters for films/shows, mood or genre, earliest year and max length, plus sorting by match, IMDb, Letterboxd or newest, all run locally over those saved results with no network requests. The page tells you when your region, services or favourites have changed since the last fetch, so you know when to refresh.
 
 "Loved it" adds a result to your favourites and hides it. "Seen it" and "Not for me" just hide it. All preferences are stored in your browser.
 

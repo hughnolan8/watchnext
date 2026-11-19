@@ -5,8 +5,6 @@ import type { RecommendRequest } from "@/lib/types";
 
 export const maxDuration = 60;
 
-const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
-
 export async function POST(req: NextRequest) {
   let body: Partial<RecommendRequest>;
   try {
@@ -29,10 +27,6 @@ export async function POST(req: NextRequest) {
       region: body.region,
       providers,
       seeds,
-      type: body.type === "movie" || body.type === "tv" ? body.type : "all",
-      genres: (body.genres ?? []).filter((g) => typeof g === "string").slice(0, 20),
-      minYear: num(body.minYear),
-      maxRuntime: num(body.maxRuntime),
       exclude: (body.exclude ?? []).filter((x) => typeof x === "string").slice(0, 2000),
     });
     return NextResponse.json(result);
