@@ -52,3 +52,11 @@ code {
   font-family: ui-monospace, monospace;
   font-size: 0.9em;
 }
+
+/* Sideways poster rows scroll by touch, trackpad or arrows, without a visible bar */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

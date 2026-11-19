@@ -39,6 +39,7 @@ export interface Suggestion {
   year: number | null;
   overview: string;
   poster: string | null;
+  backdrop?: string | null; // wide image for the hero banner (missing on older saved picks)
   genres: string[];
   genreIds: number[];
   runtime: number | null;
@@ -50,6 +51,7 @@ export interface Suggestion {
   tmdb: RatingInfo;
   score: number; // 0–100 blended
   reason: string;
+  becauseOf?: string[]; // favourites that led here (missing on older saved picks)
 }
 
 export interface RecommendResponse {

@@ -73,6 +73,7 @@ export interface Details {
   year: number | null;
   overview: string;
   poster: string | null;
+  backdrop: string | null;
   genres: string[];
   genreIds: number[];
   runtime: number | null; // minutes (movie) or typical episode length (tv)
@@ -176,6 +177,7 @@ interface RawDetails {
   first_air_date?: string;
   overview: string;
   poster_path: string | null;
+  backdrop_path?: string | null;
   genres: { id: number; name: string }[];
   runtime?: number;
   episode_run_time?: number[];
@@ -216,6 +218,7 @@ export async function getDetails(type: MediaType, id: number, region: string): P
     year: yearOf(d.release_date ?? d.first_air_date),
     overview: d.overview,
     poster: d.poster_path ? `${IMG}/w342${d.poster_path}` : null,
+    backdrop: d.backdrop_path ? `${IMG}/w1280${d.backdrop_path}` : null,
     genres: d.genres.map((g) => g.name),
     genreIds: d.genres.map((g) => g.id),
     runtime: type === "movie" ? d.runtime || null : d.episode_run_time?.[0] ?? null,
