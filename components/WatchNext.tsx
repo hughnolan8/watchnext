@@ -7,7 +7,6 @@ import { load, save } from "@/lib/storage";
 import type { Account, ProviderInfo, RecommendResponse, Seed, Suggestion } from "@/lib/types";
 import { AccountMenu } from "./AccountMenu";
 import { Filters } from "./Filters";
-import { SeedSearch } from "./SeedSearch";
 import { TitleCard } from "./TitleCard";
 
 interface Hidden {
@@ -71,7 +70,6 @@ export function WatchNext({
 
   const addSeed = (s: Seed) =>
     setSeeds((prev) => (prev.some((p) => p.id === s.id && p.type === s.type) ? prev : [...prev, s].slice(-10)));
-  const removeSeed = (s: Seed) => setSeeds((prev) => prev.filter((p) => !(p.id === s.id && p.type === s.type)));
 
   const signature = signatureOf(region, selected, seeds);
   const stale = !!stored && stored.signature !== signature;
@@ -156,36 +154,6 @@ export function WatchNext({
       )}
 
       <div className="space-y-6">
-        <Section step="1" title="Your services" hint={`${selected.length} on your account · ${region}`}>
-          {subscriptions.length ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {subscriptions.map((p) => (
-                <span
-                  key={p.id}
-                  className="flex items-center gap-2 rounded-xl border border-line bg-surface-2 py-1.5 pl-1.5 pr-3 text-sm"
-                >
-                  {p.logo && <img src={p.logo} alt="" className="h-7 w-7 rounded-lg" loading="lazy" />}
-                  {p.name}
-                </span>
-              ))}
-              <Link href="/account" className="ml-1 text-sm text-accent hover:underline">
-                Manage subscriptions
-              </Link>
-            </div>
-          ) : (
-            <p className="text-sm text-muted">
-              You haven&apos;t added any subscriptions yet.{" "}
-              <Link href="/account" className="text-accent hover:underline">
-                Add the services you pay for
-              </Link>
-            </p>
-          )}
-        </Section>
-
-        <Section step="2" title="Things you love" hint="Optional, but makes picks much better">
-          <SeedSearch seeds={seeds} onAdd={addSeed} onRemove={removeSeed} />
-        </Section>
-
         <div className="flex flex-wrap items-center gap-4">
           <button
             type="button"
@@ -196,7 +164,12 @@ export function WatchNext({
             {loading ? "Finding picks…" : stored ? "Refresh suggestions" : "Get suggestions"}
           </button>
           {!selected.length && hasTmdb && (
-            <span className="text-sm text-muted">Add at least one service to your account.</span>
+            <span className="text-sm text-muted">
+              <Link href="/account" className="text-accent hover:underline">
+                Add the services you pay for
+              </Link>{" "}
+              to get suggestions.
+            </span>
           )}
           {stale && !loading && (
             <span className="text-sm text-accent">
@@ -284,27 +257,4 @@ function timeAgo(ts: number) {
   const hrs = Math.round(mins / 60);
   if (hrs < 24) return `${hrs} h ago`;
   return new Date(ts).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-}
-
-function Section({
-  step,
-  title,
-  hint,
-  children,
-}: {
-  step: string;
-  title: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-2xl border border-line bg-surface p-5 sm:p-6">
-      <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="font-display text-sm font-bold text-accent">{step}</span>
-        <h2 className="font-display text-xl font-semibold">{title}</h2>
-        {hint && <span className="text-sm text-muted">{hint}</span>}
-      </div>
-      {children}
-    </section>
-  );
 }
