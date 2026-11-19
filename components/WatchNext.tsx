@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { applyFilters, DEFAULT_FILTERS, type FilterState } from "@/lib/filter";
+import { activeFilterCount, applyFilters, DEFAULT_FILTERS, type FilterState } from "@/lib/filter";
 import { load, save } from "@/lib/storage";
 import type { Account, ProviderInfo, RecommendResponse, Seed, Suggestion } from "@/lib/types";
 import { AccountMenu } from "./AccountMenu";
@@ -120,8 +120,7 @@ export function WatchNext({
     [stored, filters, hiddenKeys],
   );
   const unhiddenTotal = stored ? stored.results.filter((s) => !hiddenKeys.has(s.key)).length : 0;
-  const filtersActive =
-    filters.type !== "all" || filters.genres.length > 0 || filters.minYear != null || filters.maxRuntime != null;
+  const filtersActive = activeFilterCount(filters) > 0;
 
   const hide = (s: Suggestion) => setHidden((prev) => [...prev, { key: s.key, title: s.title }]);
   const loved = (s: Suggestion) => {
@@ -240,17 +239,8 @@ export function WatchNext({
               </span>
             </div>
 
-            <div className="mb-6 rounded-2xl border border-line bg-surface p-5">
-              <Filters value={filters} onChange={setFilters} />
-              {filtersActive && (
-                <button
-                  type="button"
-                  onClick={() => setFilters({ ...DEFAULT_FILTERS, sort: filters.sort })}
-                  className="mt-4 text-sm text-accent hover:underline"
-                >
-                  Clear filters
-                </button>
-              )}
+            <div className="mb-6">
+              <Filters value={filters} onChange={setFilters} matchCount={visible.length} />
             </div>
 
             {stored.warnings.map((w) => (
