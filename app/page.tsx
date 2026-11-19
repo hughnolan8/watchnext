@@ -1,13 +1,18 @@
+import { redirect } from "next/navigation";
 import { WatchNext } from "@/components/WatchNext";
+import { getSubscriptions } from "@/lib/account";
+import { currentUser } from "@/lib/auth";
 
-// Read env at request time so editing .env.local + restarting is all that's needed.
+// Read env and the session at request time.
 export const dynamic = "force-dynamic";
 
-export default function Home() {
-  const region = (process.env.DEFAULT_REGION ?? "GB").trim().toUpperCase();
+export default async function Home() {
+  const user = await currentUser();
+  if (!user) redirect("/login");
   return (
     <WatchNext
-      defaultRegion={/^[A-Z]{2}$/.test(region) ? region : "GB"}
+      user={user}
+      subscriptions={getSubscriptions(user.id, user.region)}
       hasTmdb={!!process.env.TMDB_API_KEY?.trim()}
       hasOmdb={!!process.env.OMDB_API_KEY?.trim()}
     />
