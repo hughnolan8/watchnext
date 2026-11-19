@@ -120,6 +120,7 @@ export async function recommend(req: RecommendRequest): Promise<RecommendRespons
       year: d.year,
       overview: d.overview,
       poster: d.poster,
+      backdrop: d.backdrop,
       genres: d.genres,
       genreIds: d.genreIds,
       runtime: d.runtime,
@@ -139,6 +140,7 @@ export async function recommend(req: RecommendRequest): Promise<RecommendRespons
       },
       score: Math.round(score),
       reason,
+      becauseOf: liked,
     };
   });
 
