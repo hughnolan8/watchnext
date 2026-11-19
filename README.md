@@ -1,36 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# WatchNext
 
-## Getting Started
+Suggestions for films and TV that are streaming **on the services you already pay for**, ranked by a blend of IMDb, Letterboxd and TMDB ratings, and steered by titles you love.
 
-First, run the development server:
+## Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local   # then add your keys
+npm run dev                  # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Keys
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable | Needed for | Where to get it |
+| --- | --- | --- |
+| `TMDB_API_KEY` | Everything: search, recommendations, which service has what | Free at <https://www.themoviedb.org/settings/api> (v3 key or v4 read token both work) |
+| `OMDB_API_KEY` | IMDb ratings | Free at <https://www.omdbapi.com/apikey.aspx> (1,000 lookups/day) |
+| `DEFAULT_REGION` | Default streaming country | Two-letter code, `GB` by default. Users can switch in the header. |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Letterboxd needs no key. It has no public API, so the server reads the average rating from each film's public page (`letterboxd.com/tmdb/{id}`). If that fails, the card shows "—". Letterboxd only covers films, so shows have no Letterboxd rating.
 
-## Learn More
+## How suggestions work
 
-To learn more about Next.js, take a look at the following resources:
+1. **Your services.** You pick your subscriptions for your region. Only subscription, free and ad-supported availability counts (not rent/buy). Data is from JustWatch via TMDB.
+2. **Candidates.** For each title you love, TMDB's *recommendations* and *similar* lists are collected. Titles that several of your favourites point to score higher. With no favourites (or too few matches), it tops up with the best-rated titles on your services.
+3. **Filters.** Films/shows, genres or a mood preset, earliest year, and max runtime (episode length for shows).
+4. **Availability check.** The top ~60 candidates are checked against your services in your region.
+5. **Ratings and score.** IMDb (OMDb) and Letterboxd ratings are fetched for the top 30. The score (0–100) is a weighted average of IMDb 40%, Letterboxd 40% and TMDB 20%, using whichever are available. With favourites, it's 65% rating and 35% how strongly your favourites point to the title.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+"Loved it" adds a result to your favourites and hides it. "Seen it" and "Not for me" just hide it. All preferences are stored in your browser.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Layout
 
-## Deploy on Vercel
+```
+app/api/{regions,providers,search,recommend}/route.ts   server endpoints (keys stay server-side)
+lib/tmdb.ts, lib/omdb.ts, lib/letterboxd.ts              data sources
+lib/recommend.ts                                         candidate gathering, filtering, scoring
+components/                                              UI
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This product uses the TMDB API but is not endorsed or certified by TMDB.
