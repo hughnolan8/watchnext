@@ -56,3 +56,11 @@ export interface RecommendResponse {
   results: Suggestion[];
   warnings: string[];
 }
+
+/** A signed-in user. Subscriptions are stored per region alongside the account. */
+export interface Account {
+  id: number;
+  email: string;
+  name: string;
+  region: string;
+}

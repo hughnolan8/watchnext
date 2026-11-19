@@ -1,12 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { applyFilters, DEFAULT_FILTERS, type FilterState } from "@/lib/filter";
 import { load, save } from "@/lib/storage";
-import type { ProviderInfo, RecommendResponse, Seed, Suggestion } from "@/lib/types";
+import type { Account, ProviderInfo, RecommendResponse, Seed, Suggestion } from "@/lib/types";
+import { AccountMenu } from "./AccountMenu";
 import { Filters } from "./Filters";
 import { SeedSearch } from "./SeedSearch";
-import { ServicePicker } from "./ServicePicker";
 import { TitleCard } from "./TitleCard";
 
 interface Hidden {
@@ -26,20 +27,18 @@ const signatureOf = (region: string, providers: number[], seeds: Seed[]) =>
   JSON.stringify([region, [...providers].sort(), seeds.map((s) => `${s.type}:${s.id}`).sort()]);
 
 export function WatchNext({
-  defaultRegion,
+  user,
+  subscriptions,
   hasTmdb,
   hasOmdb,
 }: {
-  defaultRegion: string;
+  user: Account;
+  subscriptions: ProviderInfo[]; // from the account; edited on /account
   hasTmdb: boolean;
   hasOmdb: boolean;
 }) {
+  const region = user.region;
   const [ready, setReady] = useState(false);
-  const [region, setRegion] = useState(defaultRegion);
-  const [regions, setRegions] = useState<{ code: string; name: string }[]>([]);
-  const [providers, setProviders] = useState<ProviderInfo[]>([]);
-  const [providersLoading, setProvidersLoading] = useState(true);
-  const [selectedByRegion, setSelectedByRegion] = useState<Record<string, number[]>>({});
   const [seeds, setSeeds] = useState<Seed[]>([]);
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [hidden, setHidden] = useState<Hidden[]>([]);
@@ -48,63 +47,27 @@ export function WatchNext({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const selected = useMemo(() => selectedByRegion[region] ?? [], [selectedByRegion, region]);
+  const selected = useMemo(() => subscriptions.map((s) => s.id), [subscriptions]);
 
-  // Load saved preferences and suggestions once, after hydration
+  // Favourites, filters and saved picks stay in this browser, kept separate per account.
+  // The first account to sign in here picks up anything saved before accounts existed.
+  const key = useCallback((k: string) => `u${user.id}.${k}`, [user.id]);
   useEffect(() => {
-    setRegion(load("region", defaultRegion));
-    setSelectedByRegion(load("services", {}));
-    setSeeds(load("seeds", []));
-    setFilters({ ...DEFAULT_FILTERS, ...load("filters", {}) });
-    setHidden(load("hidden", []));
-    setStored(load<Stored | null>("results", null));
+    setSeeds(load(key("seeds"), load("seeds", [])));
+    setFilters({ ...DEFAULT_FILTERS, ...load(key("filters"), load("filters", {})) });
+    setHidden(load(key("hidden"), load("hidden", [])));
+    setStored(load<Stored | null>(key("results"), load("results", null)));
     setReady(true);
-  }, [defaultRegion]);
+  }, [key]);
 
   useEffect(() => {
     if (!ready) return;
-    save("region", region);
-    save("services", selectedByRegion);
-    save("seeds", seeds);
-    save("filters", filters);
-    save("hidden", hidden);
-    save("results", stored);
-  }, [ready, region, selectedByRegion, seeds, filters, hidden, stored]);
-
-  useEffect(() => {
-    if (!hasTmdb) return;
-    fetch("/api/regions")
-      .then((r) => (r.ok ? r.json() : []))
-      .then(setRegions)
-      .catch(() => {});
-  }, [hasTmdb]);
-
-  // Reload the service list whenever the region changes
-  useEffect(() => {
-    if (!ready || !hasTmdb) return;
-    let cancelled = false;
-    setProvidersLoading(true);
-    fetch(`/api/providers?region=${region}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((list: ProviderInfo[]) => {
-        if (cancelled) return;
-        setProviders(list);
-        // Drop any saved services this region doesn't have
-        const ids = new Set(list.map((p) => p.id));
-        setSelectedByRegion((prev) => ({ ...prev, [region]: (prev[region] ?? []).filter((id) => ids.has(id)) }));
-      })
-      .catch(() => !cancelled && setError("Couldn't load streaming services for this region."))
-      .finally(() => !cancelled && setProvidersLoading(false));
-    return () => {
-      cancelled = true;
-    };
-  }, [region, ready, hasTmdb]);
-
-  const toggleService = (id: number) =>
-    setSelectedByRegion((prev) => {
-      const cur = prev[region] ?? [];
-      return { ...prev, [region]: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] };
-    });
+    save(key("seeds"), seeds);
+    save(key("filters"), filters);
+    save(key("hidden"), hidden);
+    save(key("results"), stored);
+    save("region", region); // so a new account on this browser starts in the same region
+  }, [ready, key, region, seeds, filters, hidden, stored]);
 
   const addSeed = (s: Seed) =>
     setSeeds((prev) => (prev.some((p) => p.id === s.id && p.type === s.type) ? prev : [...prev, s].slice(-10)));
@@ -131,7 +94,9 @@ export function WatchNext({
       const data = await res.json();
       if (!res.ok) {
         setError(
-          data.error === "missing_key"
+          data.error === "unauthorised"
+            ? "You've been signed out. Sign in again to get suggestions."
+            : data.error === "missing_key"
             ? `Add ${data.key} to .env.local and restart the server.`
             : data.error === "no_providers"
               ? "Pick at least one streaming service first."
@@ -173,20 +138,7 @@ export function WatchNext({
           </h1>
           <p className="text-sm text-muted">Great things to watch on the services you already pay for.</p>
         </div>
-        <label className="flex items-center gap-2 text-sm text-muted">
-          Region
-          <select
-            value={region}
-            onChange={(e) => setRegion(e.target.value)}
-            className="rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-fg"
-          >
-            {(regions.length ? regions : [{ code: region, name: region }]).map((r) => (
-              <option key={r.code} value={r.code}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <AccountMenu user={user} />
       </header>
 
       {!hasTmdb && (
@@ -205,13 +157,30 @@ export function WatchNext({
       )}
 
       <div className="space-y-6">
-        <Section step="1" title="Your services" hint={`${selected.length} selected`}>
-          <ServicePicker
-            providers={providers}
-            selected={selected}
-            onToggle={toggleService}
-            loading={hasTmdb && providersLoading}
-          />
+        <Section step="1" title="Your services" hint={`${selected.length} on your account · ${region}`}>
+          {subscriptions.length ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {subscriptions.map((p) => (
+                <span
+                  key={p.id}
+                  className="flex items-center gap-2 rounded-xl border border-line bg-surface-2 py-1.5 pl-1.5 pr-3 text-sm"
+                >
+                  {p.logo && <img src={p.logo} alt="" className="h-7 w-7 rounded-lg" loading="lazy" />}
+                  {p.name}
+                </span>
+              ))}
+              <Link href="/account" className="ml-1 text-sm text-accent hover:underline">
+                Manage subscriptions
+              </Link>
+            </div>
+          ) : (
+            <p className="text-sm text-muted">
+              You haven&apos;t added any subscriptions yet.{" "}
+              <Link href="/account" className="text-accent hover:underline">
+                Add the services you pay for
+              </Link>
+            </p>
+          )}
         </Section>
 
         <Section step="2" title="Things you love" hint="Optional, but makes picks much better">
@@ -227,7 +196,9 @@ export function WatchNext({
           >
             {loading ? "Finding picks…" : stored ? "Refresh suggestions" : "Get suggestions"}
           </button>
-          {!selected.length && hasTmdb && <span className="text-sm text-muted">Pick at least one service.</span>}
+          {!selected.length && hasTmdb && (
+            <span className="text-sm text-muted">Add at least one service to your account.</span>
+          )}
           {stale && !loading && (
             <span className="text-sm text-accent">
               Your region, services or favourites changed. Refresh to update.

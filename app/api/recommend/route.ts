@@ -1,11 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { errorResponse, isRegion } from "@/lib/api";
+import { currentUser } from "@/lib/auth";
 import { recommend } from "@/lib/recommend";
 import type { RecommendRequest } from "@/lib/types";
 
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
+  if (!(await currentUser())) return NextResponse.json({ error: "unauthorised" }, { status: 401 });
   let body: Partial<RecommendRequest>;
   try {
     body = await req.json();
