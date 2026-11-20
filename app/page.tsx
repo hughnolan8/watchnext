@@ -12,7 +12,7 @@ export default async function Home() {
   return (
     <WatchNext
       user={user}
-      subscriptions={getSubscriptions(user.id, user.region)}
+      subscriptions={await getSubscriptions(user.id, user.region)}
       hasTmdb={!!process.env.TMDB_API_KEY?.trim()}
       hasOmdb={!!process.env.OMDB_API_KEY?.trim()}
     />

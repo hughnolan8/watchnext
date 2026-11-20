@@ -33,11 +33,8 @@ const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 export async function startSession(userId: number) {
   const token = randomBytes(32).toString("base64url");
   const expires = Date.now() + SESSION_DAYS * 864e5;
-  db().prepare("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)").run(
-    sha256(token),
-    userId,
-    expires,
-  );
+  const sql = await db();
+  await sql`INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (${sha256(token)}, ${userId}, ${expires})`;
   (await cookies()).set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
@@ -50,7 +47,10 @@ export async function startSession(userId: number) {
 export async function endSession() {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
-  if (token) db().prepare("DELETE FROM sessions WHERE token_hash = ?").run(sha256(token));
+  if (token) {
+    const sql = await db();
+    await sql`DELETE FROM sessions WHERE token_hash = ${sha256(token)}`;
+  }
   jar.delete(SESSION_COOKIE);
 }
 
@@ -58,21 +58,20 @@ export async function endSession() {
 export async function currentUser(): Promise<Account | null> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
-  const row = db()
-    .prepare(
-      `SELECT u.id, u.email, u.name, u.region, s.expires_at
-       FROM sessions s JOIN users u ON u.id = s.user_id
-       WHERE s.token_hash = ?`,
-    )
-    .get(sha256(token)) as (Account & { expires_at: number }) | undefined;
+  const sql = await db();
+  const [row] = await sql`
+    SELECT u.id, u.email, u.name, u.region, s.expires_at
+    FROM sessions s JOIN users u ON u.id = s.user_id
+    WHERE s.token_hash = ${sha256(token)}`;
   if (!row) return null;
-  if (row.expires_at < Date.now()) {
-    db().prepare("DELETE FROM sessions WHERE token_hash = ?").run(sha256(token));
+  if (Number(row.expires_at) < Date.now()) {
+    await sql`DELETE FROM sessions WHERE token_hash = ${sha256(token)}`;
     return null;
   }
-  return { id: row.id, email: row.email, name: row.name, region: row.region };
+  return { id: Number(row.id), email: String(row.email), name: String(row.name), region: String(row.region) };
 }
 
-export function cleanExpiredSessions() {
-  db().prepare("DELETE FROM sessions WHERE expires_at < ?").run(Date.now());
+export async function cleanExpiredSessions() {
+  const sql = await db();
+  await sql`DELETE FROM sessions WHERE expires_at < ${Date.now()}`;
 }
