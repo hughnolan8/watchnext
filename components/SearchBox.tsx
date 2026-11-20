@@ -17,6 +17,9 @@ export function SearchBox({ subscriptions }: { subscriptions: ProviderInfo[] }) 
   const wrap = useRef<HTMLDivElement>(null);
   const mine = useMemo(() => new Set(subscriptions.map((s) => s.id)), [subscriptions]);
 
+  // Enter shows every match in a full-screen list; typing goes back to the quick dropdown.
+  const [all, setAll] = useState(false);
+
   useEffect(() => {
     const query = q.trim();
     if (query.length < 2) {
@@ -27,7 +30,7 @@ export function SearchBox({ subscriptions }: { subscriptions: ProviderInfo[] }) 
     setStatus("loading");
     const ctrl = new AbortController();
     const timer = setTimeout(() => {
-      fetch(`/api/search?q=${encodeURIComponent(query)}`, { signal: ctrl.signal })
+      fetch(`/api/search?q=${encodeURIComponent(query)}${all ? "&all=1" : ""}`, { signal: ctrl.signal })
         .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
         .then((data: SearchResult[]) => {
           setResults(data);
@@ -37,12 +40,23 @@ export function SearchBox({ subscriptions }: { subscriptions: ProviderInfo[] }) 
           if (!ctrl.signal.aborted) setStatus("error");
           void e;
         });
-    }, 300);
+    }, all ? 0 : 300);
     return () => {
       clearTimeout(timer);
       ctrl.abort();
     };
-  }, [q]);
+  }, [q, all]);
+
+  useEffect(() => {
+    if (!all) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setAll(false);
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [all]);
 
   useEffect(() => {
     if (!open) return;
@@ -58,7 +72,7 @@ export function SearchBox({ subscriptions }: { subscriptions: ProviderInfo[] }) 
     };
   }, [open]);
 
-  const showPanel = open && q.trim().length >= 2;
+  const showPanel = open && !all && q.trim().length >= 2;
 
   return (
     <div ref={wrap} className="relative w-full sm:w-72 lg:w-80">
@@ -72,8 +86,18 @@ export function SearchBox({ subscriptions }: { subscriptions: ProviderInfo[] }) 
           value={q}
           onChange={(e) => {
             setQ(e.target.value);
+            setAll(false);
             setOpen(true);
           }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && q.trim().length >= 2) {
+              e.preventDefault();
+              setOpen(false);
+              setAll(true);
+              e.currentTarget.blur(); // closes the phone keyboard
+            }
+          }}
+          enterKeyHint="search"
           onFocus={() => setOpen(true)}
           placeholder="Search shows and films"
           aria-label="Search for a film or show"
@@ -101,10 +125,74 @@ export function SearchBox({ subscriptions }: { subscriptions: ProviderInfo[] }) 
               to see which of these you can already watch.
             </p>
           )}
+          {results.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setAll(true);
+              }}
+              className="w-full border-t border-line p-3 text-center text-xs font-semibold text-accent hover:bg-surface-2"
+            >
+              See all results · press Enter
+            </button>
+          )}
+        </div>
+      )}
+
+      {all && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Search results for ${q.trim()}`}
+          className="fixed inset-0 z-[60] flex flex-col bg-bg/95 pt-[env(safe-area-inset-top)] backdrop-blur"
+        >
+          <div className="flex items-center gap-3 border-b border-line px-4 py-3 sm:px-8">
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-display text-lg font-bold">Results for &ldquo;{q.trim()}&rdquo;</p>
+              <p className="text-xs text-muted">
+                {status === "loading"
+                  ? "Searching…"
+                  : status === "done"
+                    ? `${results.length} ${results.length === 1 ? "title" : "titles"} · ${
+                        results.filter((r) => r.providers.some((p) => mine.has(p.id))).length
+                      } on your services`
+                    : ""}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAll(false)}
+              aria-label="Close search results"
+              className="rounded-full p-2 text-muted hover:bg-surface-2 hover:text-fg"
+            >
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5" aria-hidden>
+                <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] sm:px-8">
+            {status === "loading" && !results.length && <p className="py-6 text-sm text-muted">Searching…</p>}
+            {status === "error" && <p className="py-6 text-sm text-bad">Search isn&apos;t working right now. Try again in a moment.</p>}
+            {status === "done" && !results.length && <p className="py-6 text-sm text-muted">No films or shows found.</p>}
+            {results.length > 0 && (
+              <ul className="mx-auto grid max-w-6xl gap-x-6 divide-y divide-line md:grid-cols-2 md:divide-y-0">
+                {sortYoursFirst(results, mine).map((r) => (
+                  <ResultRow key={`${r.type}:${r.id}`} r={r} mine={mine} />
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       )}
     </div>
   );
+}
+
+/** Titles on your services first, keeping the search's own order within each group. */
+function sortYoursFirst(results: SearchResult[], mine: Set<number>) {
+  const yours = (r: SearchResult) => r.providers.some((p) => mine.has(p.id));
+  return [...results.filter(yours), ...results.filter((r) => !yours(r))];
 }
 
 function ResultRow({ r, mine }: { r: SearchResult; mine: Set<number> }) {
