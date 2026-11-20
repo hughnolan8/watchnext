@@ -117,12 +117,9 @@ export function WatchNext({
   return (
     <div className="pb-[calc(6rem+env(safe-area-inset-bottom))]">
       <header className={`relative z-40 sm:sticky sm:top-[env(safe-area-inset-top)] flex flex-wrap items-center justify-between gap-4 bg-gradient-to-b from-bg via-bg/90 to-bg/0 py-4 ${pad}`}>
-        <div className="flex items-baseline gap-4">
-          <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
-            Watch<span className="text-accent">Next</span>
-          </h1>
-          <p className="hidden text-sm text-muted md:block">Great things to watch on the services you already pay for.</p>
-        </div>
+        <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
+          Watch<span className="text-accent">Next</span>
+        </h1>
         <div className="flex w-full items-center gap-3 sm:w-auto">
           {hasTmdb && <SearchBox subscriptions={subscriptions} />}
           {stored && <Filters value={filters} onChange={setFilters} matchCount={visible.length} />}
@@ -166,7 +163,6 @@ export function WatchNext({
           ) : (
             stored && (
               <span>
-                Updated weekly · last updated {timeAgo(catalogue.builtAt!)} ·{" "}
                 {filtersActive || visible.length !== unhiddenTotal
                   ? `${visible.length} of ${unhiddenTotal} match`
                   : `${visible.length} titles`}
@@ -264,13 +260,4 @@ function Hero({ s, onMore, className }: { s: Suggestion; onMore: () => void; cla
 
 function listNames(xs: string[]) {
   return xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
-}
-
-function timeAgo(ts: number) {
-  const mins = Math.round((Date.now() - ts) / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins} min ago`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs} h ago`;
-  return new Date(ts).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
