@@ -47,9 +47,10 @@ Accounts live in Postgres (Neon, via `@neondatabase/serverless`). Passwords are 
 
 ## How suggestions work
 
-Suggestions are **built once a week on the server and shared by everyone**, so opening the app costs no TMDB, OMDb or Letterboxd calls.
+Suggestions are **built daily on the server and shared by everyone**, so opening the app costs no TMDB, OMDb or Letterboxd calls.
 
-1. **Weekly build.** A Vercel cron job (`vercel.json`, Mondays 05:00 UTC) calls `/api/cron/refresh-catalogue`. For each popular service in `CATALOGUE` ([lib/catalogue.ts](lib/catalogue.ts)), currently Netflix, Prime Video, Disney+, Apple TV, Paramount+ and BBC iPlayer in the UK, it collects the best-rated and the most popular films and shows on that service (TMDB discover), checks they're really streaming there, and fetches IMDb and Letterboxd ratings for the best 120 (`CATALOGUE_POOL`). The results go in the `catalogue` table, one row per region and service. A full build takes under a minute and uses about 720 OMDb lookups (the free tier allows 1,000 a day).
+1. **Daily build.** A Vercel cron job (`vercel.json`, 05:00 UTC) calls `/api/cron/refresh-catalogue`. For each popular service in `CATALOGUE` ([lib/catalogue.ts](lib/catalogue.ts)), currently Netflix, Prime Video, Disney+, Apple TV, Paramount+, BBC iPlayer, NOW, Sky Go, ITVX, Channel 4 and MUBI in the UK, it collects the best-rated and the most popular films and shows on that service (TMDB discover), checks they're really streaming there, and rates the best 400 (`CATALOGUE_POOL`) with IMDb and Letterboxd. The results go in the `catalogue` table, one row per region and service. Services are built longest-unbuilt first until about two minutes have passed; the rest go first next run.
+   Ratings are remembered for a month in `title_ratings`, so each run only looks up titles it hasn't seen, at most 750 OMDb lookups a day across all runs (the free tier allows 1,000). Titles past that limit go without an IMDb rating until a later run fills it in.
 2. **Score.** 0–100, a weighted average of IMDb 40%, Letterboxd 40% and TMDB 20%, using whichever are available.
 3. **Your picks.** The home page merges the stored lists for the services on your account and ranks them by score. Services outside `CATALOGUE`, and regions without one, don't get suggestions yet. Add them to `CATALOGUE` to include them.
 
@@ -67,12 +68,12 @@ The home page groups them into rows of 12 (top picks, new, genres, acclaimed, pe
 
 ```
 app/api/{regions,providers,search}/route.ts             server endpoints (keys stay server-side)
-app/api/cron/refresh-catalogue                           weekly build of the shared suggestions
+app/api/cron/refresh-catalogue                           daily build of the shared suggestions
 app/api/auth/{signup,login,logout}, app/api/account      accounts, subscriptions, saved app data
 app/{login,signup,account}/page.tsx                      sign-in, sign-up, account settings
 lib/db.ts, lib/auth.ts, lib/account.ts, lib/userData.ts  Postgres schema, sessions, account queries
 lib/tmdb.ts, lib/omdb.ts, lib/letterboxd.ts              data sources
-lib/catalogue.ts, lib/recommend.ts                       weekly catalogue, candidate gathering and scoring
+lib/catalogue.ts, lib/recommend.ts                       daily catalogue, candidate gathering and scoring
 components/                                              UI
 ```
 

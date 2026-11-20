@@ -38,7 +38,7 @@ export function WatchNext({
 }: {
   user: Account;
   subscriptions: ProviderInfo[]; // from the account; edited on /account
-  catalogue: CatalogueView; // shared suggestions for these services, rebuilt weekly on the server
+  catalogue: CatalogueView; // shared suggestions for these services, rebuilt daily on the server
   saved: SavedData; // favourites, hidden titles and filters stored on the account
   hasTmdb: boolean;
   hasOmdb: boolean;
@@ -210,7 +210,7 @@ export function WatchNext({
             <span>Suggestions aren&apos;t available for your region yet.</span>
           ) : !catalogue.covered.length && !catalogue.builtAt ? (
             <span>
-              Suggestions are built weekly for {listNames(catalogue.supported)}.{" "}
+              Suggestions are built daily for {listNames(catalogue.supported)}.{" "}
               {subscriptions.some((s) => catalogue.supportedIds.includes(s.id))
                 ? "The first batch isn't ready yet. Check back soon."
                 : "Add one of these on your account to see suggestions."}

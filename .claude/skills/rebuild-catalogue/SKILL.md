@@ -1,6 +1,6 @@
 ---
 name: rebuild-catalogue
-description: Run WatchNext's weekly suggestions build by hand, locally or in production, for all services or one. Use after changing ranking/catalogue code, or when suggestions look stale or empty.
+description: Run WatchNext's daily suggestions build by hand, locally or in production, for all services or one. Use after changing ranking/catalogue code, or when suggestions look stale or empty.
 ---
 
 # Rebuild the catalogue
@@ -15,7 +15,7 @@ The build is `GET /api/cron/refresh-catalogue`, protected by `Authorization: Bea
    set -a; source .env.local; set +a
    curl -s -H "Authorization: Bearer $CRON_SECRET" "http://localhost:3000/api/cron/refresh-catalogue?region=GB&provider=8"
    ```
-   Drop `&provider=…` to rebuild a whole region, or both params for everything (~1 minute, ~720 OMDb lookups).
+   Drop `&provider=…` to rebuild a whole region, or both params for everything (up to ~2 minutes, at most 750 new OMDb lookups a day — cached ratings are reused).
 
 Note: the local `.env.local` from `npm run setup` points at the Development database, so this doesn't touch production data.
 
