@@ -65,6 +65,13 @@ async function migrate(sql: NeonQueryFunction<false, false>) {
       updated_at BIGINT NOT NULL,
       PRIMARY KEY (user_id, key)
     )`;
+  // One row per AI search ("Ask WatchNext"), for per-account rate limits. Old rows are pruned.
+  await sql`
+    CREATE TABLE IF NOT EXISTS ask_log (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at      BIGINT NOT NULL
+    )`;
+  await sql`CREATE INDEX IF NOT EXISTS ask_log_user_at ON ask_log (user_id, at)`;
 }
 
 /**

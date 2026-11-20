@@ -19,6 +19,7 @@ You need access to the `hugh-nolans-projects` team on Vercel for the pull to wor
 | --- | --- | --- |
 | `TMDB_API_KEY` | Everything: search, recommendations, which service has what | Free at <https://www.themoviedb.org/settings/api> (v3 key or v4 read token both work) |
 | `OMDB_API_KEY` | IMDb ratings | Free at <https://www.omdbapi.com/apikey.aspx> (1,000 lookups/day) |
+| `ANTHROPIC_API_KEY` | "Ask WatchNext" AI search (optional) | <https://platform.claude.com/settings/keys>. Each question is one or two Claude calls; limited to 20 per 10 minutes and 150 a day per account |
 | `DEFAULT_REGION` | Default streaming country for new accounts | Two-letter code, `GB` by default. Users can change it on their Account page. |
 | `DATABASE_URL` | Accounts and subscriptions | Postgres connection string. Free from [Neon](https://neon.tech), or added for you by Vercel's Neon integration. Tables are created automatically on first use. |
 

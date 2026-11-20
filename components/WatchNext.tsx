@@ -9,6 +9,7 @@ import { fetchTitle } from "@/lib/titleFetch";
 import type { CatalogueView } from "@/lib/catalogue";
 import type { Account, ProviderInfo, SearchResult, Seed, Suggestion } from "@/lib/types";
 import { AccountMenu } from "./AccountMenu";
+import { AskResults, runAsk, type AskState } from "./AskResults";
 import { Filters } from "./Filters";
 import { PosterRow } from "./PosterRow";
 import { SearchBox } from "./SearchBox";
@@ -33,6 +34,7 @@ export function WatchNext({
   saved,
   hasTmdb,
   hasOmdb,
+  hasAi,
 }: {
   user: Account;
   subscriptions: ProviderInfo[]; // from the account; edited on /account
@@ -40,6 +42,7 @@ export function WatchNext({
   saved: SavedData; // favourites, hidden titles and filters stored on the account
   hasTmdb: boolean;
   hasOmdb: boolean;
+  hasAi: boolean; // ANTHROPIC_API_KEY is set, so "Ask WatchNext" is available
 }) {
   const region = user.region;
   const [ready, setReady] = useState(false);
@@ -118,6 +121,22 @@ export function WatchNext({
 
   const closeDetails = useCallback(() => setOpen(null), []);
 
+  // "Ask WatchNext": AI search over this week's stored picks.
+  const [asking, setAsking] = useState<AskState | null>(null);
+  const askCtrl = useRef<AbortController | null>(null);
+  const ask = useCallback((q: string) => {
+    askCtrl.current?.abort();
+    const ctrl = (askCtrl.current = new AbortController());
+    setAsking({ q, status: "loading" });
+    runAsk(q, ctrl.signal)
+      .then((next) => !ctrl.signal.aborted && setAsking(next))
+      .catch(() => {});
+  }, []);
+  const closeAsk = useCallback(() => {
+    askCtrl.current?.abort();
+    setAsking(null);
+  }, []);
+
   // Search results open the same details pop-up, loaded on demand (they're not in the catalogue).
   const [titleLoad, setTitleLoad] = useState<{ title: string; failed: boolean } | null>(null);
   const loadReq = useRef(0);
@@ -155,6 +174,7 @@ export function WatchNext({
               subscriptions={subscriptions}
               onOpenTitle={openSearchResult}
               detailsOpen={!!open || !!titleLoad}
+              onAsk={hasAi && stored ? ask : undefined}
             />
           )}
           {stored && <Filters value={filters} onChange={setFilters} matchCount={visible.length} />}
@@ -229,6 +249,10 @@ export function WatchNext({
           </div>
         )}
       </section>
+
+      {asking && (
+        <AskResults state={asking} onAsk={ask} onClose={closeAsk} onOpen={openDetails} detailsOpen={!!open} />
+      )}
 
       {open && (
         <TitleDetails

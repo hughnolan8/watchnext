@@ -78,3 +78,15 @@ export interface SearchResult {
   providers: ProviderInfo[];
   watchLink: string | null;
 }
+
+/** The answer to an "Ask WatchNext" question (see lib/ask.ts). */
+export interface AskResult {
+  results: Suggestion[];
+  summary: string;
+  /** Short labels for what was searched for, e.g. "Like Luther", "IMDb 7+". */
+  chips: string[];
+  /** Parts of the question the catalogue can't answer. */
+  unsupported: string[];
+  /** Titles from "like X" we couldn't find. */
+  notFound: string[];
+}

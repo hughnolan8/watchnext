@@ -20,6 +20,7 @@ export default async function Home() {
       saved={(await getUserData(user.id)) as SavedData}
       hasTmdb={!!process.env.TMDB_API_KEY?.trim()}
       hasOmdb={!!process.env.OMDB_API_KEY?.trim()}
+      hasAi={!!process.env.ANTHROPIC_API_KEY?.trim()}
     />
   );
 }

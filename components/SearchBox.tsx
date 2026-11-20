@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProviderInfo, SearchResult } from "@/lib/types";
 import { prefetchTitle } from "@/lib/titleFetch";
+import { SparkIcon } from "./PosterRow";
 import { watchLinks } from "@/lib/watchLinks";
 
 /**
@@ -14,10 +15,12 @@ export function SearchBox({
   subscriptions,
   onOpenTitle,
   detailsOpen,
+  onAsk,
 }: {
   subscriptions: ProviderInfo[];
   onOpenTitle: (r: SearchResult) => void; // click a result: show its details pop-up
   detailsOpen: boolean; // a details pop-up is on top, so Esc belongs to it
+  onAsk?: (q: string) => void; // AI search ("Ask WatchNext"); missing when it isn't set up
 }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -110,6 +113,12 @@ export function SearchBox({
           onKeyDown={(e) => {
             if (e.key === "Enter" && q.trim().length >= 2) {
               e.preventDefault();
+              if (onAsk && looksLikeRequest(q)) {
+                onAsk(q.trim());
+                exit();
+                e.currentTarget.blur();
+                return;
+              }
               setOpen(false);
               setAll(true);
               e.currentTarget.blur(); // closes the phone keyboard
@@ -117,7 +126,7 @@ export function SearchBox({
           }}
           enterKeyHint="search"
           onFocus={() => setOpen(true)}
-          placeholder="Search shows and films"
+          placeholder={onAsk ? "Search, or ask for anything" : "Search shows and films"}
           aria-label="Search for a film or show"
           className="w-full bg-transparent text-sm outline-none placeholder:text-muted"
         />
@@ -125,6 +134,22 @@ export function SearchBox({
 
       {showPanel && (
         <div className="absolute right-0 z-50 mt-2 max-h-[70dvh] w-full overflow-y-auto rounded-xl border border-line bg-surface shadow-2xl sm:w-[26rem]">
+          {onAsk && (
+            <button
+              type="button"
+              onClick={() => {
+                onAsk(q.trim());
+                exit();
+              }}
+              className="flex w-full items-center gap-2 border-b border-line p-3 text-left text-sm hover:bg-surface-2"
+            >
+              <SparkIcon className="h-4 w-4 shrink-0 text-accent" />
+              <span className="min-w-0 flex-1 truncate">
+                Ask WatchNext: <span className="font-semibold">&ldquo;{q.trim()}&rdquo;</span>
+              </span>
+              {looksLikeRequest(q) && <span className="shrink-0 text-xs text-muted">Enter</span>}
+            </button>
+          )}
           {status === "loading" && !results.length && <p className="p-4 text-sm text-muted">Searching…</p>}
           {status === "error" && <p className="p-4 text-sm text-bad">Search isn&apos;t working right now. Try again in a moment.</p>}
           {status === "done" && !results.length && <p className="p-4 text-sm text-muted">No films or shows found.</p>}
@@ -205,6 +230,16 @@ export function SearchBox({
       )}
     </div>
   );
+}
+
+/**
+ * Does this read like a request ("shows like Luther", "action films above 7") rather than a title?
+ * Enter sends requests to AI search and titles to the normal search; both are always a click away.
+ */
+export function looksLikeRequest(q: string) {
+  const t = q.trim().toLowerCase();
+  if (t.split(/\s+/).length >= 6) return true;
+  return /\b(like|similar|only|rated|rating|imdb|letterboxd|above|below|over|under|something|anything|shows|series|films|movies|without|recommend|suggest|binge|\d0s|\d+\+)(?=\W|$)/.test(t);
 }
 
 /** Titles on your services first, keeping the search's own order within each group. */
