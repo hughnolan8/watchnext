@@ -2,11 +2,11 @@ import "server-only";
 import { db } from "./db";
 
 /** The app data each account keeps on the server, so it follows them to any device. */
-export const USER_DATA_KEYS = ["seeds", "hidden", "filters", "results"] as const;
+export const USER_DATA_KEYS = ["seeds", "hidden", "filters"] as const;
 export type UserDataKey = (typeof USER_DATA_KEYS)[number];
 export type UserData = Partial<Record<UserDataKey, unknown>>;
 
-/** Largest JSON value accepted for one key (a batch of suggestions is usually ~100 KB). */
+/** Largest JSON value accepted for one key . */
 export const MAX_USER_DATA_BYTES = 1_000_000;
 
 export const isUserDataKey = (k: unknown): k is UserDataKey =>

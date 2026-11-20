@@ -5,7 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { activeFilterCount, applyFilters, DEFAULT_FILTERS, type FilterState } from "@/lib/filter";
 import { buildRows } from "@/lib/rows";
 import { load, save } from "@/lib/storage";
-import type { Account, ProviderInfo, RecommendResponse, Seed, Suggestion } from "@/lib/types";
+import type { CatalogueView } from "@/lib/catalogue";
+import type { Account, ProviderInfo, Seed, Suggestion } from "@/lib/types";
 import { AccountMenu } from "./AccountMenu";
 import { Filters } from "./Filters";
 import { PosterRow } from "./PosterRow";
@@ -16,35 +17,25 @@ interface Hidden {
   title: string;
 }
 
-/** Suggestions fetched once and kept in the browser; filters run over these locally. */
-interface Stored {
-  results: Suggestion[];
-  warnings: string[];
-  fetchedAt: number;
-  signature: string; // region + services + favourites used for this fetch
-}
-
 /** What the server keeps for the account (see lib/userData.ts). Any key may be missing. */
 export interface SavedData {
   seeds?: Seed[];
   hidden?: Hidden[];
   filters?: Partial<FilterState>;
-  results?: Stored | null;
 }
-
-const signatureOf = (region: string, providers: number[], seeds: Seed[]) =>
-  JSON.stringify([region, [...providers].sort(), seeds.map((s) => `${s.type}:${s.id}`).sort()]);
 
 export function WatchNext({
   user,
   subscriptions,
+  catalogue,
   saved,
   hasTmdb,
   hasOmdb,
 }: {
   user: Account;
   subscriptions: ProviderInfo[]; // from the account; edited on /account
-  saved: SavedData; // favourites, hidden, filters and suggestions stored on the account
+  catalogue: CatalogueView; // shared suggestions for these services, rebuilt weekly on the server
+  saved: SavedData; // favourites, hidden titles and filters stored on the account
   hasTmdb: boolean;
   hasOmdb: boolean;
 }) {
@@ -53,14 +44,9 @@ export function WatchNext({
   const [seeds, setSeeds] = useState<Seed[]>([]);
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [hidden, setHidden] = useState<Hidden[]>([]);
-  const [stored, setStored] = useState<Stored | null>(null);
+  const stored = catalogue.results.length ? catalogue : null;
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const selected = useMemo(() => subscriptions.map((s) => s.id), [subscriptions]);
-
-  // Favourites, hidden titles, filters and fetched picks are stored on the account (server).
+  // Favourites, hidden titles and filters are stored on the account (server).
   // Anything the server doesn't have yet is taken from this browser's older local copy, then
   // uploaded, so data saved before it moved to the server isn't lost.
   const lastSent = useRef<Record<string, string>>({});
@@ -70,7 +56,6 @@ export function WatchNext({
     setSeeds(saved.seeds ?? load(key("seeds"), load("seeds", [])));
     setFilters({ ...DEFAULT_FILTERS, ...(saved.filters ?? load(key("filters"), load("filters", {}))) });
     setHidden(saved.hidden ?? load(key("hidden"), load("hidden", [])));
-    setStored(saved.results !== undefined ? saved.results : load<Stored | null>(key("results"), load("results", null)));
     setReady(true);
   }, [user.id, saved]);
 
@@ -79,7 +64,7 @@ export function WatchNext({
     if (!ready) return;
     save("region", region); // so a new account on this browser starts in the same region
     const timer = setTimeout(() => {
-      const values: Record<string, unknown> = { seeds, hidden, filters, results: stored };
+      const values: Record<string, unknown> = { seeds, hidden, filters };
       for (const [k, value] of Object.entries(values)) {
         const json = JSON.stringify(value);
         if (lastSent.current[k] === json) continue;
@@ -97,51 +82,10 @@ export function WatchNext({
       }
     }, 600);
     return () => clearTimeout(timer);
-  }, [ready, region, seeds, filters, hidden, stored]);
+  }, [ready, region, seeds, filters, hidden]);
 
   const addSeed = (s: Seed) =>
     setSeeds((prev) => (prev.some((p) => p.id === s.id && p.type === s.type) ? prev : [...prev, s].slice(-10)));
-
-  const signature = signatureOf(region, selected, seeds);
-  const stale = !!stored && stored.signature !== signature;
-
-  // The only network call for suggestions. Filters never trigger it.
-  const fetchSuggestions = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/recommend", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          region,
-          providers: selected,
-          seeds: seeds.map(({ id, type, title }) => ({ id, type, title })),
-          exclude: hidden.map((h) => h.key),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(
-          data.error === "unauthorised"
-            ? "You've been signed out. Sign in again to get suggestions."
-            : data.error === "missing_key"
-            ? `Add ${data.key} to .env.local and restart the server.`
-            : data.error === "no_providers"
-              ? "Pick at least one streaming service first."
-              : "Something went wrong fetching suggestions. Try again.",
-        );
-        return;
-      }
-      const { results, warnings } = data as RecommendResponse;
-      setStored({ results, warnings, fetchedAt: Date.now(), signature: signatureOf(region, selected, seeds) });
-      requestAnimationFrame(() => document.getElementById("results")?.scrollIntoView({ behavior: "smooth" }));
-    } catch {
-      setError("Network error. Is the dev server running?");
-    } finally {
-      setLoading(false);
-    }
-  }, [region, selected, seeds, hidden]);
 
   const hiddenKeys = useMemo(() => new Set(hidden.map((h) => h.key)), [hidden]);
   const visible = useMemo(
@@ -200,74 +144,48 @@ export function WatchNext({
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-4">
-          <button
-            type="button"
-            onClick={fetchSuggestions}
-            disabled={loading || !selected.length || !hasTmdb}
-            className={`rounded-full font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
-              stored
-                ? "border border-line px-4 py-2 text-sm hover:border-fg/30"
-                : "bg-accent px-7 py-3 text-bg shadow-lg shadow-accent/20 hover:brightness-110"
-            }`}
-          >
-            {loading ? "Finding picks…" : stored ? "Refresh suggestions" : "Get suggestions"}
-          </button>
-          {!selected.length && hasTmdb && (
-            <span className="text-sm text-muted">
+        <div className="flex flex-wrap items-center gap-4 text-sm text-muted">
+          {!subscriptions.length ? (
+            <span>
               <Link href="/account" className="text-accent hover:underline">
                 Add the services you pay for
               </Link>{" "}
-              to get suggestions.
+              to see suggestions.
             </span>
-          )}
-          {stale && !loading && (
-            <span className="text-sm text-accent">Your region, services or favourites changed. Refresh to update.</span>
-          )}
-          {stored && !stale && !loading && (
-            <span className="text-sm text-muted">
-              Saved {timeAgo(stored.fetchedAt)} ·{" "}
-              {filtersActive || visible.length !== unhiddenTotal
-                ? `${visible.length} of ${unhiddenTotal} match`
-                : `${visible.length} titles`}
-              {hidden.length > 0 && (
-                <>
-                  {" "}
-                  · {hidden.length} hidden ·{" "}
-                  <button type="button" onClick={() => setHidden([])} className="text-accent hover:underline">
-                    show again
-                  </button>
-                </>
-              )}
+          ) : !catalogue.supported.length ? (
+            <span>Suggestions aren&apos;t available for your region yet.</span>
+          ) : !catalogue.covered.length && !catalogue.builtAt ? (
+            <span>
+              Suggestions are built weekly for {listNames(catalogue.supported)}.{" "}
+              {subscriptions.some((s) => catalogue.supportedIds.includes(s.id))
+                ? "The first batch isn't ready yet. Check back soon."
+                : "Add one of these on your account to see suggestions."}
             </span>
+          ) : (
+            stored && (
+              <span>
+                Updated weekly · last updated {timeAgo(catalogue.builtAt!)} ·{" "}
+                {filtersActive || visible.length !== unhiddenTotal
+                  ? `${visible.length} of ${unhiddenTotal} match`
+                  : `${visible.length} titles`}
+                {hidden.length > 0 && (
+                  <>
+                    {" "}
+                    · {hidden.length} hidden ·{" "}
+                    <button type="button" onClick={() => setHidden([])} className="text-accent hover:underline">
+                      show again
+                    </button>
+                  </>
+                )}
+              </span>
+            )
           )}
         </div>
-
-        {error && <p className="rounded-xl border border-bad/50 bg-bad/10 p-4 text-sm">{error}</p>}
-        {stored?.warnings.map((w) => (
-          <p key={w} className="text-sm text-muted">
-            {w}
-          </p>
-        ))}
       </div>
 
       <section id="results" className="scroll-mt-20 pt-6">
-        {loading && !stored && (
-          <div className="space-y-8">
-            {Array.from({ length: 3 }, (_, r) => (
-              <div key={r} className={`space-y-3 ${pad}`}>
-                <div className="h-5 w-48 animate-pulse rounded bg-surface" />
-                <div className="flex gap-3 overflow-hidden">
-                  {Array.from({ length: 8 }, (_, i) => (
-                    <div key={i} className="aspect-[2/3] w-36 shrink-0 animate-pulse rounded-xl bg-surface sm:w-40 lg:w-44" />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
         {stored && (
-          <div className={loading ? "pointer-events-none opacity-50 transition" : "transition"}>
+          <div>
             {hero && <Hero s={hero} onMore={() => setOpen(hero)} className={pad} />}
             {rows.length ? (
               <div className="space-y-6 pt-6">
@@ -278,8 +196,8 @@ export function WatchNext({
             ) : (
               <p className={`mx-4 rounded-2xl border border-line bg-surface p-6 text-muted sm:mx-8`}>
                 {visible.length
-                  ? "Only a handful of picks match these filters. Loosen them, or refresh to fetch a new batch."
-                  : "None of your saved picks match these filters. Loosen them, or refresh to fetch a new batch."}
+                  ? "Only a handful of picks match these filters. Try loosening them."
+                  : "None of this week's picks match these filters. Try loosening them."}
               </p>
             )}
           </div>
@@ -340,6 +258,10 @@ function Hero({ s, onMore, className }: { s: Suggestion; onMore: () => void; cla
       </div>
     </div>
   );
+}
+
+function listNames(xs: string[]) {
+  return xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
 }
 
 function timeAgo(ts: number) {

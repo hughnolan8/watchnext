@@ -46,7 +46,17 @@ async function migrate(sql: NeonQueryFunction<false, false>) {
       PRIMARY KEY (user_id, region, provider_id)
     )`;
   // Per-account app data that used to live only in the browser: favourites (seeds), hidden
-  // titles, filters, and the last batch of fetched suggestions (results). One JSON value per key.
+  // titles and filters. One JSON value per key.
+  // Shared suggestions, rebuilt weekly by the cron job: the best titles on each popular
+  // service in each supported region (see lib/catalogue.ts). Everyone reads from this.
+  await sql`
+    CREATE TABLE IF NOT EXISTS catalogue (
+      region      TEXT NOT NULL,
+      provider_id INTEGER NOT NULL,
+      results     JSONB NOT NULL,
+      built_at    BIGINT NOT NULL,
+      PRIMARY KEY (region, provider_id)
+    )`;
   await sql`
     CREATE TABLE IF NOT EXISTS user_data (
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

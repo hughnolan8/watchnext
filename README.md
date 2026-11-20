@@ -32,28 +32,36 @@ The repo deploys to Vercel as a standard Next.js project; every push to `main` g
 
 You sign up with an email and password. Each account stores the streaming services you subscribe to, so they follow you to any device. New accounts go straight to picking their services; you can change them any time from **Account** (top right), along with your name and region. Subscriptions are saved per region, because service IDs differ by country.
 
-Accounts live in Postgres (Neon, via `@neondatabase/serverless`). Passwords are hashed with scrypt; sessions are a random token in an httpOnly cookie, with only its hash stored. Favourites, hidden titles, filters and the last batch of fetched suggestions are saved to the account too (the `user_data` table, via `/api/account/data`), so they're the same on every device. Anything saved in a browser before this moved to the server is uploaded the first time that account opens the app there.
+Accounts live in Postgres (Neon, via `@neondatabase/serverless`). Passwords are hashed with scrypt; sessions are a random token in an httpOnly cookie, with only its hash stored. Favourites, hidden titles and filters are saved to the account too (the `user_data` table, via `/api/account/data`), so they're the same on every device. Anything saved in a browser before this moved to the server is uploaded the first time that account opens the app there.
 
 ## How suggestions work
 
-1. **Your services.** The subscriptions saved on your account for your region. Only subscription, free and ad-supported availability counts (not rent/buy). Data is from JustWatch via TMDB.
-2. **Candidates.** For each title you love, TMDB's *recommendations* and *similar* lists are collected. Titles that several of your favourites point to score higher. The best-rated films and shows on your services are always mixed in too, so there's plenty of variety.
-3. **Availability check.** Up to ~120 candidates are checked against your services in your region.
-4. **Ratings and score.** IMDb (OMDb) and Letterboxd ratings are fetched for the top 70. The score (0–100) is a weighted average of IMDb 40%, Letterboxd 40% and TMDB 20%, using whichever are available. With favourites, it's 65% rating and 35% how strongly your favourites point to the title.
+Suggestions are **built once a week on the server and shared by everyone**, so opening the app costs no TMDB, OMDb or Letterboxd calls.
 
-**Fetch once, filter instantly.** "Get suggestions" is the only call that fetches suggestions. The results (usually 50–70 titles) are saved in your browser. Filters for films/shows, mood or genre, earliest year and max length, plus sorting by match, IMDb, Letterboxd or newest, all run locally over those saved results with no network requests. The page tells you when your region, services or favourites have changed since the last fetch, so you know when to refresh.
+1. **Weekly build.** A Vercel cron job (`vercel.json`, Mondays 05:00 UTC) calls `/api/cron/refresh-catalogue`. For each popular service in `CATALOGUE` ([lib/catalogue.ts](lib/catalogue.ts)), currently Netflix, Prime Video, Disney+, Apple TV, Paramount+ and BBC iPlayer in the UK, it finds the best-rated films and shows on that service (TMDB discover), checks they're really streaming there, and fetches IMDb and Letterboxd ratings for the top 70. The results go in the `catalogue` table, one row per region and service. A full build takes under a minute and uses about 420 OMDb lookups.
+2. **Score.** 0–100, a weighted average of IMDb 40%, Letterboxd 40% and TMDB 20%, using whichever are available.
+3. **Your picks.** The home page merges the stored lists for the services on your account and ranks them by score. Services outside `CATALOGUE`, and regions without one, don't get suggestions yet. Add them to `CATALOGUE` to include them.
 
-"Loved it" adds a result to your favourites and hides it. "Seen it" and "Not for me" just hide it.
+**Running the build by hand.** The route needs `CRON_SECRET` (set in Vercel for Production; Vercel sends it automatically for cron runs). Locally, add `CRON_SECRET` to `.env.local`, then run:
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" "http://localhost:3000/api/cron/refresh-catalogue"
+```
+
+Add `?region=GB&provider=8` to rebuild one service. In Vercel you can also press **Run** next to the job under Settings → Cron Jobs.
+
+Filters (films/shows, mood or genre, year, length, sort) run in the browser over those picks. "Loved it" saves a title to your favourites and hides it. "Seen it" and "Not for me" just hide it. Favourites don't change the shared suggestions.
 
 ## Layout
 
 ```
-app/api/{regions,providers,search,recommend}/route.ts   server endpoints (keys stay server-side)
+app/api/{regions,providers,search}/route.ts             server endpoints (keys stay server-side)
+app/api/cron/refresh-catalogue                           weekly build of the shared suggestions
 app/api/auth/{signup,login,logout}, app/api/account      accounts, subscriptions, saved app data
 app/{login,signup,account}/page.tsx                      sign-in, sign-up, account settings
 lib/db.ts, lib/auth.ts, lib/account.ts, lib/userData.ts  Postgres schema, sessions, account queries
 lib/tmdb.ts, lib/omdb.ts, lib/letterboxd.ts              data sources
-lib/recommend.ts                                         candidate gathering, filtering, scoring
+lib/catalogue.ts, lib/recommend.ts                       weekly catalogue, candidate gathering and scoring
 components/                                              UI
 ```
 

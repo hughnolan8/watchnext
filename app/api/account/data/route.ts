@@ -2,14 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { currentUser } from "@/lib/auth";
 import { getUserData, isUserDataKey, MAX_USER_DATA_BYTES, setUserData } from "@/lib/userData";
 
-/** The signed-in account's saved favourites, hidden titles, filters and suggestions. */
+/** The signed-in account's saved favourites, hidden titles and filters. */
 export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "unauthorised" }, { status: 401 });
   return NextResponse.json(await getUserData(user.id));
 }
 
-/** Save one of them. Body: { key: "seeds" | "hidden" | "filters" | "results", value } */
+/** Save one of them. Body: { key: "seeds" | "hidden" | "filters", value } */
 export async function PUT(req: NextRequest) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "unauthorised" }, { status: 401 });
