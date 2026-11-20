@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { activeFilterCount, applyFilters, DEFAULT_FILTERS, type FilterState } from "@/lib/filter";
 import { buildRows } from "@/lib/rows";
 import { load, save } from "@/lib/storage";
@@ -24,17 +24,27 @@ interface Stored {
   signature: string; // region + services + favourites used for this fetch
 }
 
+/** What the server keeps for the account (see lib/userData.ts). Any key may be missing. */
+export interface SavedData {
+  seeds?: Seed[];
+  hidden?: Hidden[];
+  filters?: Partial<FilterState>;
+  results?: Stored | null;
+}
+
 const signatureOf = (region: string, providers: number[], seeds: Seed[]) =>
   JSON.stringify([region, [...providers].sort(), seeds.map((s) => `${s.type}:${s.id}`).sort()]);
 
 export function WatchNext({
   user,
   subscriptions,
+  saved,
   hasTmdb,
   hasOmdb,
 }: {
   user: Account;
   subscriptions: ProviderInfo[]; // from the account; edited on /account
+  saved: SavedData; // favourites, hidden, filters and suggestions stored on the account
   hasTmdb: boolean;
   hasOmdb: boolean;
 }) {
@@ -50,25 +60,44 @@ export function WatchNext({
 
   const selected = useMemo(() => subscriptions.map((s) => s.id), [subscriptions]);
 
-  // Favourites, filters and saved picks stay in this browser, kept separate per account.
-  // The first account to sign in here picks up anything saved before accounts existed.
-  const key = useCallback((k: string) => `u${user.id}.${k}`, [user.id]);
+  // Favourites, hidden titles, filters and fetched picks are stored on the account (server).
+  // Anything the server doesn't have yet is taken from this browser's older local copy, then
+  // uploaded, so data saved before it moved to the server isn't lost.
+  const lastSent = useRef<Record<string, string>>({});
   useEffect(() => {
-    setSeeds(load(key("seeds"), load("seeds", [])));
-    setFilters({ ...DEFAULT_FILTERS, ...load(key("filters"), load("filters", {})) });
-    setHidden(load(key("hidden"), load("hidden", [])));
-    setStored(load<Stored | null>(key("results"), load("results", null)));
+    const key = (k: string) => `u${user.id}.${k}`;
+    for (const [k, v] of Object.entries(saved)) if (v !== undefined) lastSent.current[k] = JSON.stringify(v);
+    setSeeds(saved.seeds ?? load(key("seeds"), load("seeds", [])));
+    setFilters({ ...DEFAULT_FILTERS, ...(saved.filters ?? load(key("filters"), load("filters", {}))) });
+    setHidden(saved.hidden ?? load(key("hidden"), load("hidden", [])));
+    setStored(saved.results !== undefined ? saved.results : load<Stored | null>(key("results"), load("results", null)));
     setReady(true);
-  }, [key]);
+  }, [user.id, saved]);
 
+  // Save changes to the server, a moment after they stop, and only the keys that changed.
   useEffect(() => {
     if (!ready) return;
-    save(key("seeds"), seeds);
-    save(key("filters"), filters);
-    save(key("hidden"), hidden);
-    save(key("results"), stored);
     save("region", region); // so a new account on this browser starts in the same region
-  }, [ready, key, region, seeds, filters, hidden, stored]);
+    const timer = setTimeout(() => {
+      const values: Record<string, unknown> = { seeds, hidden, filters, results: stored };
+      for (const [k, value] of Object.entries(values)) {
+        const json = JSON.stringify(value);
+        if (lastSent.current[k] === json) continue;
+        lastSent.current[k] = json;
+        fetch("/api/account/data", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ key: k, value }),
+          keepalive: json.length < 60_000, // lets small saves finish if the tab closes
+        })
+          .then((res) => {
+            if (!res.ok) delete lastSent.current[k]; // retry on the next change
+          })
+          .catch(() => delete lastSent.current[k]);
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [ready, region, seeds, filters, hidden, stored]);
 
   const addSeed = (s: Seed) =>
     setSeeds((prev) => (prev.some((p) => p.id === s.id && p.type === s.type) ? prev : [...prev, s].slice(-10)));

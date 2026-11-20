@@ -45,6 +45,16 @@ async function migrate(sql: NeonQueryFunction<false, false>) {
       added_at    BIGINT NOT NULL,
       PRIMARY KEY (user_id, region, provider_id)
     )`;
+  // Per-account app data that used to live only in the browser: favourites (seeds), hidden
+  // titles, filters, and the last batch of fetched suggestions (results). One JSON value per key.
+  await sql`
+    CREATE TABLE IF NOT EXISTS user_data (
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      key        TEXT NOT NULL,
+      value      JSONB NOT NULL,
+      updated_at BIGINT NOT NULL,
+      PRIMARY KEY (user_id, key)
+    )`;
 }
 
 /**
