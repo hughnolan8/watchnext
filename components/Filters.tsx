@@ -1,18 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { activeFilterCount, DEFAULT_FILTERS, type FilterState, type SortKey } from "@/lib/filter";
+import { activeFilterCount, DEFAULT_FILTERS, type FilterState } from "@/lib/filter";
 import { GENRES, MOODS } from "@/lib/genres";
 
-const SORTS: [SortKey, string][] = [
-  ["score", "Best match"],
-  ["imdb", "IMDb rating"],
-  ["letterboxd", "Letterboxd rating"],
-  ["year", "Newest"],
-];
-
-const YEARS = [2024, 2020, 2015, 2010, 2000, 1990, 1980];
-const RUNTIMES = [30, 60, 90, 120, 150];
 const IMDB_MINS = [6, 6.5, 7, 7.5, 8, 8.5];
 const SEASON_RANGES: [string, string][] = [
   ["1", "1"],
@@ -51,8 +42,6 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
     </div>
   );
 }
-
-const selectClass = "w-full rounded-lg border border-line bg-surface-2 px-2 py-2 text-sm text-fg";
 
 /**
  * A "Filters" button that opens a popup with every filter. Changes apply live,
@@ -109,7 +98,7 @@ export function Filters({
         {active > 0 && (
           <button
             type="button"
-            onClick={() => onChange({ ...DEFAULT_FILTERS, sort: value.sort })}
+            onClick={() => onChange(DEFAULT_FILTERS)}
             className="text-sm text-accent hover:underline"
           >
             Clear
@@ -201,54 +190,6 @@ export function Filters({
                 ))}
               </Group>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <label className="text-sm text-muted">
-                  <span className="mb-1 block">From</span>
-                  <select
-                    value={value.minYear ?? ""}
-                    onChange={(e) => set({ minYear: e.target.value ? Number(e.target.value) : null })}
-                    className={selectClass}
-                  >
-                    <option value="">any year</option>
-                    {YEARS.map((y) => (
-                      <option key={y} value={y}>
-                        {y}+
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-sm text-muted">
-                  <span className="mb-1 block">Max length</span>
-                  <select
-                    value={value.maxRuntime ?? ""}
-                    onChange={(e) => set({ maxRuntime: e.target.value ? Number(e.target.value) : null })}
-                    className={selectClass}
-                    title="Film runtime, or episode length for shows"
-                  >
-                    <option value="">any</option>
-                    {RUNTIMES.map((r) => (
-                      <option key={r} value={r}>
-                        {r} min
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-sm text-muted">
-                  <span className="mb-1 block">Sort by</span>
-                  <select
-                    value={value.sort}
-                    onChange={(e) => set({ sort: e.target.value as SortKey })}
-                    className={selectClass}
-                  >
-                    {SORTS.map(([k, label]) => (
-                      <option key={k} value={k}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
               <Group label="Mood">
                 {MOODS.map((m) => (
                   <Chip
@@ -273,7 +214,7 @@ export function Filters({
             <div className="flex items-center justify-between gap-3 border-t border-line px-5 pt-4 pb-safe-4">
               <button
                 type="button"
-                onClick={() => onChange({ ...DEFAULT_FILTERS, sort: value.sort })}
+                onClick={() => onChange(DEFAULT_FILTERS)}
                 disabled={active === 0}
                 className="text-sm text-accent hover:underline disabled:cursor-default disabled:text-muted disabled:no-underline"
               >

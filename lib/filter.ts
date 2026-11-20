@@ -2,29 +2,21 @@
 import { genreIdsFor } from "./genres";
 import type { Suggestion, TypeFilter } from "./types";
 
-export type SortKey = "score" | "imdb" | "letterboxd" | "year";
-
 export interface FilterState {
   type: TypeFilter;
   genres: string[];
-  minYear: number | null;
-  maxRuntime: number | null;
   minImdb: number | null;
   /** Show-only: a season / episode count range, e.g. "2-3" or "7-". */
   seasons: string | null;
   episodes: string | null;
-  sort: SortKey;
 }
 
 export const DEFAULT_FILTERS: FilterState = {
   type: "all",
   genres: [],
-  minYear: null,
-  maxRuntime: null,
   minImdb: null,
   seasons: null,
   episodes: null,
-  sort: "score",
 };
 
 /** "2-3" → [2, 3]; "7-" → [7, Infinity]; "1" → [1, 1]. */
@@ -45,8 +37,6 @@ export function applyFilters(results: Suggestion[], f: FilterState, hidden: Set<
   const out = results.filter((s) => {
     if (hidden.has(s.key)) return false;
     if (f.type !== "all" && s.type !== f.type) return false;
-    if (f.minYear && (!s.year || s.year < f.minYear)) return false;
-    if (f.maxRuntime && s.runtime && s.runtime > f.maxRuntime) return false;
     if (f.minImdb && (s.imdb.rating == null || s.imdb.rating < f.minImdb)) return false;
     if ((f.seasons || f.episodes) && s.type !== "tv") return false;
     if (!inRange(s.seasons, f.seasons) || !inRange(s.episodes, f.episodes)) return false;
@@ -57,23 +47,14 @@ export function applyFilters(results: Suggestion[], f: FilterState, hidden: Set<
     return true;
   });
 
-  const by: Record<SortKey, (s: Suggestion) => number> = {
-    score: (s) => s.score,
-    imdb: (s) => s.imdb.rating ?? -1,
-    letterboxd: (s) => s.letterboxd?.rating ?? -1,
-    year: (s) => s.year ?? 0,
-  };
-  const key = by[f.sort] ?? by.score;
-  return out.sort((a, b) => key(b) - key(a) || b.score - a.score);
+  return out.sort((a, b) => b.score - a.score);
 }
 
-/** How many filters (not counting sort) differ from the defaults. */
+/** How many filters differ from the defaults. */
 export function activeFilterCount(f: FilterState): number {
   return (
     (f.type !== "all" ? 1 : 0) +
     (f.genres.length ? 1 : 0) +
-    (f.minYear != null ? 1 : 0) +
-    (f.maxRuntime != null ? 1 : 0) +
     (f.minImdb != null ? 1 : 0) +
     (f.seasons != null ? 1 : 0) +
     (f.episodes != null ? 1 : 0)
