@@ -192,11 +192,29 @@ const between = (v: number | null | undefined, lo: number | null, hi: number | n
 };
 
 /** The hard filters: everything the stored fields can answer directly. */
+/**
+ * TMDB's genres are broad, especially for TV (there's no "Thriller": we use Mystery and Crime, and
+ * "Action" is "Action & Adventure", shared with cartoons and fantasy). So asking for thrillers
+ * or action quietly leaves out the kinds that rarely fit, unless the request asked for them.
+ */
+function implicitExcludes(spec: AskSpec): Record<MediaType, string[]> {
+  const asked = new Set([...spec.genresAll, ...spec.genresAny]);
+  if (!asked.has("thriller") && !asked.has("action")) return { movie: [], tv: [] };
+  const unless = (gs: string[]) => gs.filter((g) => !asked.has(g));
+  return {
+    movie: unless(["animation", "family"]),
+    // TV fantasy and sci-fi share one TMDB genre, so either one asked for keeps both.
+    tv: unless(["animation", "family", ...(asked.has("scifi") || asked.has("fantasy") ? [] : ["fantasy"])]),
+  };
+}
+
 export function applySpec(pool: Suggestion[], spec: AskSpec): Suggestion[] {
   const wantServices = spec.services.map((s) => s.toLowerCase());
+  const implicit = implicitExcludes(spec);
   return pool.filter((s) => {
     if (spec.type !== "all" && s.type !== spec.type) return false;
     const ids = s.genreIds ?? [];
+    if (ids.some((id) => genreIdsFor(implicit[s.type], s.type).includes(id))) return false;
     if (spec.genresAll.some((g) => !ids.some((id) => genreIdsFor([g], s.type).includes(id)))) return false;
     if (spec.genresAny.length && !ids.some((id) => genreIdsFor(spec.genresAny, s.type).includes(id))) return false;
     if (spec.excludeGenres.length && ids.some((id) => genreIdsFor(spec.excludeGenres, s.type).includes(id))) return false;
