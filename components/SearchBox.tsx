@@ -6,8 +6,8 @@ import type { ProviderInfo, SearchResult } from "@/lib/types";
 import { watchLinks } from "@/lib/watchLinks";
 
 /**
- * "Where can I watch …?" Search any title. Titles on a service you pay for look normal;
- * titles only on services you don't have are greyed out, with those services' logos still in colour.
+ * Search any show or film. Each result lists every service it streams on: the ones you pay for are
+ * highlighted in full colour, the rest are greyed out. Titles not on any of your services are greyed out.
  */
 export function SearchBox({ subscriptions }: { subscriptions: ProviderInfo[] }) {
   const [q, setQ] = useState("");
@@ -75,7 +75,7 @@ export function SearchBox({ subscriptions }: { subscriptions: ProviderInfo[] }) 
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
-          placeholder="Where can I watch…"
+          placeholder="Search shows and films"
           aria-label="Search for a film or show"
           className="w-full bg-transparent text-sm outline-none placeholder:text-muted"
         />
@@ -112,43 +112,49 @@ function ResultRow({ r, mine }: { r: SearchResult; mine: Set<number> }) {
   const yours = links.filter((l) => mine.has(l.provider.id));
   const others = links.filter((l) => !mine.has(l.provider.id));
   const canWatch = yours.length > 0;
-  const shown = canWatch ? yours : others;
+  const dim = canWatch ? "" : "opacity-50 grayscale";
 
   return (
-    <li className="flex items-center gap-3 p-3">
-      <div className={`h-16 w-11 shrink-0 overflow-hidden rounded-md bg-surface-2 ${canWatch ? "" : "opacity-50 grayscale"}`}>
+    <li className={`flex gap-3 p-3 ${canWatch ? "" : "bg-surface-2/40"}`}>
+      <div className={`h-20 w-14 shrink-0 overflow-hidden rounded-md bg-surface-2 ${dim}`}>
         {r.poster && <img src={r.poster} alt="" loading="lazy" className="h-full w-full object-cover" />}
       </div>
       <div className="min-w-0 flex-1">
         <p className={`truncate text-sm font-semibold ${canWatch ? "" : "text-muted"}`}>{r.title}</p>
-        <p className="text-xs text-muted">
-          {[r.type === "movie" ? "Film" : "Show", r.year].filter(Boolean).join(" · ")}
-          {" · "}
-          {canWatch
-            ? `On ${yours.map((l) => l.provider.name).join(", ")}`
-            : others.length
-              ? "Not on your services"
-              : "Not streaming in your region"}
+        <p className="text-xs text-muted">{[r.type === "movie" ? "Film" : "Show", r.year].filter(Boolean).join(" · ")}</p>
+
+        <p className={`mt-1 text-xs font-semibold ${canWatch ? "text-good" : "text-muted"}`}>
+          {canWatch ? "✓ On your services" : links.length ? "Not on your services" : "Not streaming"}
         </p>
-        {canWatch && others.length > 0 && (
-          <p className="truncate text-[11px] text-muted/80">Also on {others.map((l) => l.provider.name).join(", ")}</p>
+
+        {links.length > 0 && (
+          <ul className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Streaming on">
+            {[...yours, ...others].map(({ provider, url }) => {
+              const has = mine.has(provider.id);
+              return (
+                <li key={provider.id}>
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={has ? `Watch on ${provider.name} (you have it)` : `On ${provider.name} (you don't have it)`}
+                    className={`flex items-center gap-1.5 rounded-full py-0.5 pl-0.5 pr-2 text-[11px] transition ${
+                      has
+                        ? "bg-accent/10 font-semibold text-fg ring-2 ring-accent hover:bg-accent/20"
+                        : "text-muted opacity-50 ring-1 ring-line grayscale hover:opacity-80"
+                    }`}
+                  >
+                    <img src={provider.logo} alt="" className="h-5 w-5 rounded-full" />
+                    <span className="max-w-[8rem] truncate">{provider.name}</span>
+                    {has && <span className="text-accent">· You have it</span>}
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
         )}
-      </div>
-      <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-        {shown.slice(0, 4).map(({ provider, url }) => (
-          <a
-            key={provider.id}
-            href={url}
-            target="_blank"
-            rel="noreferrer"
-            title={`${canWatch ? "Watch" : "Available"} on ${provider.name}`}
-            className="transition hover:scale-110"
-          >
-            <img src={provider.logo} alt={provider.name} className="h-8 w-8 rounded-md ring-1 ring-black/20" />
-          </a>
-        ))}
         {!links.length && r.watchLink && (
-          <a href={r.watchLink} target="_blank" rel="noreferrer" className="text-xs text-muted hover:text-fg hover:underline">
+          <a href={r.watchLink} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-muted hover:text-fg hover:underline">
             Rent / buy ↗
           </a>
         )}
