@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { activeFilterCount, applyFilters, DEFAULT_FILTERS, type FilterState } from "@/lib/filter";
+import { applyFilters, DEFAULT_FILTERS, type FilterState } from "@/lib/filter";
 import { buildRows } from "@/lib/rows";
 import { load, save } from "@/lib/storage";
 import type { CatalogueView } from "@/lib/catalogue";
@@ -93,8 +93,6 @@ export function WatchNext({
     () => (stored ? applyFilters(stored.results, filters, hiddenKeys) : []),
     [stored, filters, hiddenKeys],
   );
-  const unhiddenTotal = stored ? stored.results.filter((s) => !hiddenKeys.has(s.key)).length : 0;
-  const filtersActive = activeFilterCount(filters) > 0;
 
   const hide = (s: Suggestion) => setHidden((prev) => [...prev, { key: s.key, title: s.title }]);
   const loved = (s: Suggestion) => {
@@ -161,20 +159,13 @@ export function WatchNext({
                 : "Add one of these on your account to see suggestions."}
             </span>
           ) : (
-            stored && (
+            stored &&
+            hidden.length > 0 && (
               <span>
-                {filtersActive || visible.length !== unhiddenTotal
-                  ? `${visible.length} of ${unhiddenTotal} match`
-                  : `${visible.length} titles`}
-                {hidden.length > 0 && (
-                  <>
-                    {" "}
-                    · {hidden.length} hidden ·{" "}
-                    <button type="button" onClick={() => setHidden([])} className="text-accent hover:underline">
-                      show again
-                    </button>
-                  </>
-                )}
+                {hidden.length} hidden ·{" "}
+                <button type="button" onClick={() => setHidden([])} className="text-accent hover:underline">
+                  show again
+                </button>
               </span>
             )
           )}
