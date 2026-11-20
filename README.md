@@ -32,7 +32,7 @@ The repo deploys to Vercel as a standard Next.js project; every push to `main` g
 
 You sign up with an email and password. Each account stores the streaming services you subscribe to, so they follow you to any device. New accounts go straight to picking their services; you can change them any time from **Account** (top right), along with your name and region. Subscriptions are saved per region, because service IDs differ by country.
 
-Accounts live in Postgres (Neon, via `@neondatabase/serverless`). Passwords are hashed with scrypt; sessions are a random token in an httpOnly cookie, with only its hash stored. Favourites, filters, hidden titles and saved picks are still kept in the browser, separately for each account.
+Accounts live in Postgres (Neon, via `@neondatabase/serverless`). Passwords are hashed with scrypt; sessions are a random token in an httpOnly cookie, with only its hash stored. Favourites, hidden titles, filters and the last batch of fetched suggestions are saved to the account too (the `user_data` table, via `/api/account/data`), so they're the same on every device. Anything saved in a browser before this moved to the server is uploaded the first time that account opens the app there.
 
 ## How suggestions work
 
@@ -49,9 +49,9 @@ Accounts live in Postgres (Neon, via `@neondatabase/serverless`). Passwords are 
 
 ```
 app/api/{regions,providers,search,recommend}/route.ts   server endpoints (keys stay server-side)
-app/api/auth/{signup,login,logout}, app/api/account      accounts and subscriptions
+app/api/auth/{signup,login,logout}, app/api/account      accounts, subscriptions, saved app data
 app/{login,signup,account}/page.tsx                      sign-in, sign-up, account settings
-lib/db.ts, lib/auth.ts, lib/account.ts                   Postgres schema, sessions, account queries
+lib/db.ts, lib/auth.ts, lib/account.ts, lib/userData.ts  Postgres schema, sessions, account queries
 lib/tmdb.ts, lib/omdb.ts, lib/letterboxd.ts              data sources
 lib/recommend.ts                                         candidate gathering, filtering, scoring
 components/                                              UI
