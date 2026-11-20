@@ -10,6 +10,7 @@ import type { Account, ProviderInfo, Seed, Suggestion } from "@/lib/types";
 import { AccountMenu } from "./AccountMenu";
 import { Filters } from "./Filters";
 import { PosterRow } from "./PosterRow";
+import { SearchBox } from "./SearchBox";
 import { metaLine, TitleDetails, WatchButtons } from "./TitleDetails";
 
 interface Hidden {
@@ -122,7 +123,8 @@ export function WatchNext({
           </h1>
           <p className="hidden text-sm text-muted md:block">Great things to watch on the services you already pay for.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex w-full items-center gap-3 sm:w-auto">
+          {hasTmdb && <SearchBox subscriptions={subscriptions} />}
           {stored && <Filters value={filters} onChange={setFilters} matchCount={visible.length} />}
           <AccountMenu user={user} />
         </div>
