@@ -81,30 +81,19 @@ export function Filters({
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-4 py-2 text-sm font-medium transition hover:border-fg/30"
-        >
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden>
-            <path d="M3 5h14M6 10h8M9 15h2" strokeLinecap="round" />
-          </svg>
-          Filters
-          {active > 0 && (
-            <span className="rounded-full bg-accent px-1.5 text-xs font-semibold leading-5 text-bg">{active}</span>
-          )}
-        </button>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-4 py-2 text-sm font-medium transition hover:border-fg/30"
+      >
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden>
+          <path d="M3 5h14M6 10h8M9 15h2" strokeLinecap="round" />
+        </svg>
+        Filters
         {active > 0 && (
-          <button
-            type="button"
-            onClick={() => onChange(DEFAULT_FILTERS)}
-            className="text-sm text-accent hover:underline"
-          >
-            Clear
-          </button>
+          <span className="rounded-full bg-accent px-1.5 text-xs font-semibold leading-5 text-bg">{active}</span>
         )}
-      </div>
+      </button>
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6">
