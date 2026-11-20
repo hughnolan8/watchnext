@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { similarTo } from "@/lib/similar";
 import type { Suggestion } from "@/lib/types";
 import { watchLinks } from "@/lib/watchLinks";
-import { scoreColour, SparkIcon } from "./PosterRow";
+import { PosterCard, scoreColour, SparkIcon } from "./PosterRow";
+
+const SIMILAR_MAX = 18;
 
 const compact = new Intl.NumberFormat("en-GB", { notation: "compact", maximumFractionDigits: 1 });
 
@@ -89,16 +92,52 @@ export function TitleDetails({
   onLoved,
   onSeen,
   onNotForMe,
-  onMoreLike,
+  picks,
+  onOpen,
+  startAtSimilar = false,
 }: {
   s: Suggestion;
   onClose: () => void;
   onLoved: () => void;
   onSeen: () => void;
   onNotForMe: () => void;
-  onMoreLike: () => void;
+  picks: Suggestion[]; // the user's visible suggestions, searched for titles like this one
+  onOpen: (s: Suggestion) => void;
+  startAtSimilar?: boolean; // scroll straight to "More like this" once it loads
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const similarRef = useRef<HTMLElement>(null);
+
+  // Titles TMDB says are like this one ("movie:123" keys); null while loading.
+  const [related, setRelated] = useState<string[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    setRelated(null);
+    fetch(`/api/similar?type=${s.type}&id=${s.id}`)
+      .then((res) => (res.ok ? res.json() : []))
+      .catch(() => [])
+      .then((keys: string[]) => live && setRelated(Array.isArray(keys) ? keys : []));
+    return () => {
+      live = false;
+    };
+  }, [s.type, s.id]);
+
+  const similar = useMemo(() => {
+    if (!related) return null;
+    const src = { key: s.key, id: s.id, type: s.type, title: s.title, genreIds: s.genreIds ?? [] };
+    const { closest, alike } = similarTo(src, related, picks);
+    return [...closest, ...alike].slice(0, SIMILAR_MAX);
+  }, [related, picks, s]);
+
+  const scrollToSimilar = () => similarRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  // Opened from a poster's "More like this": jump down once the list is in.
+  const jumped = useRef(false);
+  useEffect(() => {
+    if (!startAtSimilar || jumped.current || !similar) return;
+    jumped.current = true;
+    requestAnimationFrame(scrollToSimilar);
+  }, [startAtSimilar, similar]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -152,7 +191,7 @@ export function TitleDetails({
               <WatchButtons s={s} />
               <button
                 type="button"
-                onClick={onMoreLike}
+                onClick={scrollToSimilar}
                 className="inline-flex items-center gap-2 rounded-lg bg-white/15 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/25"
               >
                 <SparkIcon className="h-4 w-4" />
@@ -194,7 +233,7 @@ export function TitleDetails({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 border-t border-line px-5 pt-5 pb-safe-5 text-sm sm:px-7">
+        <div className="grid grid-cols-3 gap-2 border-t border-line px-5 py-5 text-sm sm:px-7">
           <button type="button" onClick={onLoved} className="rounded-lg border border-line py-2 hover:border-good hover:text-good" title="Seen it and loved it: use it to steer suggestions">
             ♥ Loved it
           </button>
@@ -205,6 +244,24 @@ export function TitleDetails({
             Not for me
           </button>
         </div>
+
+        <section ref={similarRef} aria-labelledby="similar-heading" className="scroll-mt-2 border-t border-line px-5 pt-5 pb-safe-5 sm:px-7">
+          <h3 id="similar-heading" className="flex items-center gap-2 font-display text-lg font-semibold">
+            <SparkIcon className="h-4 w-4 text-accent" />
+            More like {s.title}
+          </h3>
+          {!similar ? (
+            <p className="py-6 text-sm text-muted">Finding titles like {s.title}…</p>
+          ) : similar.length ? (
+            <div className="grid grid-cols-3 gap-2.5 py-4 sm:grid-cols-4 sm:gap-3">
+              {similar.map((x) => (
+                <PosterCard key={x.key} s={x} onOpen={() => onOpen(x)} className="w-full" />
+              ))}
+            </div>
+          ) : (
+            <p className="py-6 text-sm text-muted">Nothing like {s.title} is on your services this week.</p>
+          )}
+        </section>
       </div>
     </div>
   );

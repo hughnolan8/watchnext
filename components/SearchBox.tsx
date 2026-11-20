@@ -14,12 +14,10 @@ export function SearchBox({
   subscriptions,
   onOpenTitle,
   detailsOpen,
-  dismiss,
 }: {
   subscriptions: ProviderInfo[];
   onOpenTitle: (r: SearchResult) => void; // click a result: show its details pop-up
   detailsOpen: boolean; // a details pop-up is on top, so Esc belongs to it
-  dismiss: number; // bump to close the dropdown and the full results list
 }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -77,11 +75,6 @@ export function SearchBox({
       document.body.style.overflow = "";
     };
   }, [all, detailsOpen]);
-
-  useEffect(() => {
-    if (!dismiss) return;
-    exit();
-  }, [dismiss]);
 
   useEffect(() => {
     if (!open || detailsOpen) return;

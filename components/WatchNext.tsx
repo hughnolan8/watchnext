@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { activeFilterCount, applyFilters, DEFAULT_FILTERS, type FilterState } from "@/lib/filter";
+import { applyFilters, DEFAULT_FILTERS, type FilterState } from "@/lib/filter";
 import { buildRows, type Row } from "@/lib/rows";
-import { similarTo, type LikeSource } from "@/lib/similar";
 import { load, save } from "@/lib/storage";
 import { fetchTitle } from "@/lib/titleFetch";
 import type { CatalogueView } from "@/lib/catalogue";
@@ -96,53 +95,31 @@ export function WatchNext({
     [stored, filters, hiddenKeys],
   );
 
-  const activeFilters = activeFilterCount(filters) > 0;
   const hide = (s: Suggestion) => setHidden((prev) => [...prev, { key: s.key, title: s.title }]);
   const loved = (s: Suggestion) => {
     addSeed({ id: s.id, type: s.type, title: s.title, year: s.year, poster: s.poster });
     hide(s);
   };
 
+  // The details pop-up. `atSimilar` opens it scrolled to its "More like this" list.
   const [open, setOpen] = useState<Suggestion | null>(null);
+  const [atSimilar, setAtSimilar] = useState(false);
+  const openDetails = useCallback((s: Suggestion) => {
+    setAtSimilar(false);
+    setOpen(s);
+  }, []);
+  const moreLike = useCallback((s: Suggestion) => {
+    setAtSimilar(true);
+    setOpen(s);
+  }, []);
 
-  // "More like this": swaps the home rows for titles similar to one the user picked.
-  const [like, setLike] = useState<LikeSource | null>(null);
-  const [related, setRelated] = useState<string[] | null>(null); // null while loading
-  const moreLike = (s: Suggestion) => {
-    setLike({ key: s.key, id: s.id, type: s.type, title: s.title, genreIds: s.genreIds ?? [] });
-    setOpen(null);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-  useEffect(() => {
-    if (!like) return;
-    let live = true;
-    setRelated(null);
-    fetch(`/api/similar?type=${like.type}&id=${like.id}`)
-      .then((res) => (res.ok ? res.json() : []))
-      .catch(() => [])
-      .then((keys: string[]) => live && setRelated(Array.isArray(keys) ? keys : []));
-    return () => {
-      live = false;
-    };
-  }, [like]);
-
-  const rows = useMemo<Row[]>(() => {
-    if (!like) return buildRows(visible);
-    if (!related) return [];
-    const { closest, alike } = similarTo(like, related, visible);
-    const kind = like.type === "movie" ? "films" : "shows";
-    return [
-      { id: "like:closest", title: `Because you watched ${like.title}`, items: closest },
-      { id: "like:alike", title: `More ${kind} like ${like.title}`, items: alike },
-    ].filter((r) => r.items.length);
-  }, [visible, like, related]);
-  const hero = like ? undefined : (visible.find((s) => s.backdrop) ?? visible[0]);
+  const rows = useMemo<Row[]>(() => buildRows(visible), [visible]);
+  const hero = visible.find((s) => s.backdrop) ?? visible[0];
 
   const closeDetails = useCallback(() => setOpen(null), []);
 
   // Search results open the same details pop-up, loaded on demand (they're not in the catalogue).
   const [titleLoad, setTitleLoad] = useState<{ title: string; failed: boolean } | null>(null);
-  const [dismissSearch, setDismissSearch] = useState(0);
   const loadReq = useRef(0);
   const openSearchResult = (r: SearchResult) => {
     const req = ++loadReq.current;
@@ -151,7 +128,7 @@ export function WatchNext({
       .then((s) => {
         if (req !== loadReq.current) return;
         setTitleLoad(null);
-        setOpen(s);
+        openDetails(s);
       })
       .catch(() => req === loadReq.current && setTitleLoad({ title: r.title, failed: true }));
   };
@@ -178,7 +155,6 @@ export function WatchNext({
               subscriptions={subscriptions}
               onOpenTitle={openSearchResult}
               detailsOpen={!!open || !!titleLoad}
-              dismiss={dismissSearch}
             />
           )}
           {stored && <Filters value={filters} onChange={setFilters} matchCount={visible.length} />}
@@ -236,39 +212,13 @@ export function WatchNext({
       <section id="results" className="scroll-mt-20 pt-6">
         {stored && (
           <div>
-            {like && (
-              <div className={`flex flex-wrap items-center gap-3 ${pad}`}>
-                <span className="inline-flex items-center gap-2 rounded-full border border-accent/60 bg-accent/10 py-1 pl-3 pr-1 text-sm">
-                  More like <strong className="font-semibold">{like.title}</strong>
-                  <button
-                    type="button"
-                    onClick={() => setLike(null)}
-                    aria-label="Clear the More like this filter"
-                    className="rounded-full p-1 text-muted hover:bg-surface-2 hover:text-fg"
-                  >
-                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5" aria-hidden>
-                      <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
-                    </svg>
-                  </button>
-                </span>
-                <button type="button" onClick={() => setLike(null)} className="text-sm text-accent hover:underline">
-                  Back to all picks
-                </button>
-              </div>
-            )}
-            {hero && <Hero s={hero} onMore={() => setOpen(hero)} className={pad} />}
-            {like && !related ? (
-              <p className={`pt-6 text-sm text-muted ${pad}`}>Finding titles like {like.title}…</p>
-            ) : rows.length ? (
+            {hero && <Hero s={hero} onMore={() => openDetails(hero)} className={pad} />}
+            {rows.length ? (
               <div className="space-y-6 pt-6">
                 {rows.map((r) => (
-                  <PosterRow key={r.id} title={r.title} items={r.items} onOpen={setOpen} onMoreLike={moreLike} />
+                  <PosterRow key={r.id} title={r.title} items={r.items} onOpen={openDetails} onMoreLike={moreLike} />
                 ))}
               </div>
-            ) : like ? (
-              <p className={`mx-4 rounded-2xl border border-line bg-surface p-6 text-muted sm:mx-8`}>
-                Nothing like {like.title} is on your services this week{activeFilters ? " with these filters" : ""}.
-              </p>
             ) : (
               <p className={`mx-4 rounded-2xl border border-line bg-surface p-6 text-muted sm:mx-8`}>
                 {visible.length
@@ -282,15 +232,15 @@ export function WatchNext({
 
       {open && (
         <TitleDetails
+          key={open.key}
           s={open}
           onClose={closeDetails}
           onLoved={act(loved)}
           onSeen={act(hide)}
           onNotForMe={act(hide)}
-          onMoreLike={() => {
-            setDismissSearch((n) => n + 1);
-            moreLike(open);
-          }}
+          picks={visible}
+          onOpen={openDetails}
+          startAtSimilar={atSimilar}
         />
       )}
 
