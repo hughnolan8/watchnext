@@ -11,7 +11,7 @@ export interface LetterboxdRating {
  * which embeds a schema.org JSON-LD block containing the average rating.
  * Films only. Never throws: returns a null rating on any failure.
  */
-export async function getLetterboxdRating(tmdbMovieId: number): Promise<LetterboxdRating> {
+export async function getLetterboxdRating(tmdbMovieId: number, timeoutMs = 8000): Promise<LetterboxdRating> {
   const fallbackUrl = `https://letterboxd.com/tmdb/${tmdbMovieId}/`;
   try {
     const res = await fetch(fallbackUrl, {
@@ -21,7 +21,7 @@ export async function getLetterboxdRating(tmdbMovieId: number): Promise<Letterbo
         accept: "text/html",
       },
       next: { revalidate: 60 * 60 * 24 },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const url = res.url || fallbackUrl;
     if (!res.ok) return { rating: null, votes: null, url };

@@ -181,13 +181,18 @@ function toSuggestion(
 }
 
 /** Full details for any one title (e.g. a search hit), in the same shape as a suggestion. */
-export async function titleDetails(type: MediaType, id: number, region: string, providerIds: number[]) {
+export async function titleDetails(
+  type: MediaType,
+  id: number,
+  region: string,
+  providerIds: number[] | Promise<number[]>,
+  opts: { letterboxdTimeoutMs?: number } = {},
+) {
+  // Letterboxd goes by TMDB id, so it can start alongside the TMDB lookup; OMDb needs the IMDb id from it.
+  const lbP = type === "movie" ? getLetterboxdRating(id, opts.letterboxdTimeoutMs) : Promise.resolve(null);
   const d = await getDetails(type, id, region);
-  const [imdb, lb] = await Promise.all([
-    getImdbRating(d.imdbId),
-    type === "movie" ? getLetterboxdRating(d.id) : Promise.resolve(null),
-  ]);
-  const mine = new Set(providerIds);
+  const [imdb, lb, ids] = await Promise.all([getImdbRating(d.imdbId), lbP, providerIds]);
+  const mine = new Set(ids);
   const yours = d.streaming.filter((p) => mine.has(p.id));
   const reason = yours.length
     ? `On your services: ${listJoin(yours.map((p) => p.name).slice(0, 3))}`

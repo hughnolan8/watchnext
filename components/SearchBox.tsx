@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProviderInfo, SearchResult } from "@/lib/types";
+import { prefetchTitle } from "@/lib/titleFetch";
 import { watchLinks } from "@/lib/watchLinks";
 
 /**
@@ -225,10 +226,22 @@ function ResultRow({ r, mine, onOpen }: { r: SearchResult; mine: Set<number>; on
   const others = links.filter((l) => !mine.has(l.provider.id));
   const canWatch = yours.length > 0;
   const dim = canWatch ? "" : "opacity-50 grayscale";
+  // Load the details pop-up while the pointer rests on the row, so it's ready when clicked.
+  const hover = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const startPrefetch = () => {
+    clearTimeout(hover.current);
+    hover.current = setTimeout(() => prefetchTitle(r), 120);
+  };
+  const stopPrefetch = () => clearTimeout(hover.current);
+  useEffect(() => stopPrefetch, []);
 
   return (
     <li
       onClick={onOpen}
+      onMouseEnter={startPrefetch}
+      onMouseLeave={stopPrefetch}
+      onPointerDown={() => prefetchTitle(r)}
+      onFocus={() => prefetchTitle(r)}
       className={`group flex cursor-pointer gap-3 p-3 transition hover:bg-surface-2 ${canWatch ? "" : "bg-surface-2/40"}`}
     >
       <div className={`h-20 w-14 shrink-0 overflow-hidden rounded-md bg-surface-2 ${dim}`}>
