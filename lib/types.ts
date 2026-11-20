@@ -66,3 +66,14 @@ export interface Account {
   name: string;
   region: string;
 }
+
+/** A search hit and the services it streams on in the user's region. */
+export interface SearchResult {
+  id: number;
+  type: MediaType;
+  title: string;
+  year: number | null;
+  poster: string | null;
+  providers: ProviderInfo[];
+  watchLink: string | null;
+}

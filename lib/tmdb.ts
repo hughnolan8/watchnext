@@ -143,6 +143,44 @@ export async function searchTitles(query: string) {
     }));
 }
 
+type RegionProviders = { link?: string; flatrate?: ProviderEntry[]; free?: ProviderEntry[]; ads?: ProviderEntry[] };
+
+/** Subscription / free / ad-supported services, deduped, in TMDB's display order. */
+function streamingFrom(wp: RegionProviders | undefined): Provider[] {
+  const seen = new Set<number>();
+  const out: Provider[] = [];
+  for (const p of [...(wp?.flatrate ?? []), ...(wp?.free ?? []), ...(wp?.ads ?? [])]) {
+    if (seen.has(p.provider_id)) continue;
+    seen.add(p.provider_id);
+    out.push({
+      id: p.provider_id,
+      name: p.provider_name,
+      logo: `${IMG}/w92${p.logo_path}`,
+      priority: p.display_priority ?? 999,
+    });
+  }
+  return out;
+}
+
+/** Search results with the services each title streams on in `region`. */
+export async function searchWhereToWatch(query: string, region: string) {
+  const results = await searchTitles(query);
+  return Promise.all(
+    results.map(async (r) => {
+      const wp = await tmdb<{ results: Record<string, RegionProviders> }>(
+        `/${r.type}/${r.id}/watch/providers`,
+      ).catch(() => null);
+      const here = wp?.results?.[region];
+      return {
+        ...r,
+        poster: r.poster ? r.poster.replace("/w92/", "/w154/") : null,
+        providers: streamingFrom(here).map(({ id, name, logo }) => ({ id, name, logo })),
+        watchLink: here?.link ?? null,
+      };
+    }),
+  );
+}
+
 export async function getRelated(type: MediaType, id: number) {
   const [recs, similar] = await Promise.all([
     tmdb<{ results: TmdbListItem[] }>(`/${type}/${id}/recommendations`).catch(() => ({ results: [] })),
@@ -193,12 +231,7 @@ interface RawDetails {
   external_ids?: { imdb_id?: string | null };
   vote_average: number;
   vote_count: number;
-  "watch/providers"?: {
-    results: Record<
-      string,
-      { link?: string; flatrate?: ProviderEntry[]; free?: ProviderEntry[]; ads?: ProviderEntry[] }
-    >;
-  };
+  "watch/providers"?: { results: Record<string, RegionProviders> };
 }
 
 export async function getDetails(type: MediaType, id: number, region: string): Promise<Details> {
@@ -206,18 +239,7 @@ export async function getDetails(type: MediaType, id: number, region: string): P
     append_to_response: "external_ids,watch/providers",
   });
   const wp = d["watch/providers"]?.results?.[region];
-  const seen = new Set<number>();
-  const streaming: Provider[] = [];
-  for (const p of [...(wp?.flatrate ?? []), ...(wp?.free ?? []), ...(wp?.ads ?? [])]) {
-    if (seen.has(p.provider_id)) continue;
-    seen.add(p.provider_id);
-    streaming.push({
-      id: p.provider_id,
-      name: p.provider_name,
-      logo: `${IMG}/w92${p.logo_path}`,
-      priority: p.display_priority ?? 999,
-    });
-  }
+  const streaming = streamingFrom(wp);
   return {
     id: d.id,
     type,
