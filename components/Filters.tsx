@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { activeFilterCount, DEFAULT_FILTERS, type FilterState } from "@/lib/filter";
+import { describeFilters } from "@/lib/describeFilter";
+import { activeFilterCount, DEFAULT_FILTERS, rangeLabel, type FilterState } from "@/lib/filter";
 import { GENRES, MOODS } from "@/lib/genres";
 
 const IMDB_MINS = [6, 6.5, 7, 7.5, 8, 8.5];
@@ -34,6 +35,59 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
   );
 }
 
+/** A plain-English box: "no animated shows, rated 7+" → filters. */
+function Describe({ value, onChange }: { value: FilterState; onChange: (f: FilterState) => void }) {
+  const [text, setText] = useState("");
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const apply = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!text.trim()) return;
+    const { filters, changes } = describeFilters(text, value);
+    if (changes.length) {
+      onChange(filters);
+      setText("");
+      setResult({ ok: true, message: changes.join(" · ") });
+    } else {
+      setResult({ ok: false, message: "Couldn't turn that into a filter. Try a genre, “films”, “shows”, a rating or a season count." });
+    }
+  };
+
+  return (
+    <form onSubmit={apply}>
+      <label htmlFor="describe-filter" className="mb-2 block text-xs uppercase tracking-widest text-muted">
+        Describe it
+      </label>
+      <div className="flex gap-2">
+        <input
+          id="describe-filter"
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value);
+            setResult(null);
+          }}
+          placeholder="e.g. no animated shows, rated 7+"
+          autoComplete="off"
+          className="min-w-0 flex-1 rounded-full border border-line bg-bg px-4 py-2 text-base outline-none placeholder:text-muted focus:border-fg/40 sm:text-sm"
+        />
+        <button
+          type="submit"
+          disabled={!text.trim()}
+          className="rounded-full bg-fg px-4 py-2 text-sm font-medium text-bg transition hover:brightness-110 disabled:opacity-40"
+        >
+          Apply
+        </button>
+      </div>
+      {result && (
+        <p role="status" className={`mt-2 text-sm ${result.ok ? "text-fg" : "text-muted"}`}>
+          {result.ok && <span className="text-accent">✓ </span>}
+          {result.message}
+        </p>
+      )}
+    </form>
+  );
+}
+
 function Group({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
@@ -61,8 +115,17 @@ export function Filters({
   const active = activeFilterCount(value);
 
   const set = (patch: Partial<FilterState>) => onChange({ ...value, ...patch });
+  const excluded = value.excludeGenres ?? [];
   const toggleGenre = (k: string) =>
-    set({ genres: value.genres.includes(k) ? value.genres.filter((g) => g !== k) : [...value.genres, k] });
+    set({
+      genres: value.genres.includes(k) ? value.genres.filter((g) => g !== k) : [...value.genres, k],
+      excludeGenres: excluded.filter((g) => g !== k),
+    });
+  const toggleHidden = (k: string) =>
+    set({
+      excludeGenres: excluded.includes(k) ? excluded.filter((g) => g !== k) : [...excluded, k],
+      genres: value.genres.filter((g) => g !== k),
+    });
   const moodOn = (genres: string[]) =>
     genres.length === value.genres.length && genres.every((g) => value.genres.includes(g));
 
@@ -123,6 +186,8 @@ export function Filters({
             </div>
 
             <div className="space-y-6 overflow-y-auto px-5 py-5">
+              <Describe value={value} onChange={onChange} />
+
               <Group label="Show me">
                 <div className="inline-flex rounded-full border border-line p-1">
                   {(
@@ -152,6 +217,11 @@ export function Filters({
                 <Chip on={value.minImdb == null} onClick={() => set({ minImdb: null })}>
                   Any
                 </Chip>
+                {value.minImdb != null && !IMDB_MINS.includes(value.minImdb) && (
+                  <Chip on onClick={() => set({ minImdb: null })}>
+                    {value.minImdb.toFixed(1)}+
+                  </Chip>
+                )}
                 {IMDB_MINS.map((r) => (
                   <Chip key={r} on={value.minImdb === r} onClick={() => set({ minImdb: r })}>
                     {r.toFixed(1)}+
@@ -165,6 +235,11 @@ export function Filters({
                     <Chip on={value.seasons == null} onClick={() => set({ seasons: null })}>
                       Any
                     </Chip>
+                    {value.seasons && !SEASON_RANGES.some(([k]) => k === value.seasons) && (
+                      <Chip on onClick={() => set({ seasons: null })}>
+                        {rangeLabel(value.seasons)}
+                      </Chip>
+                    )}
                     {SEASON_RANGES.map(([k, label]) => (
                       <Chip key={k} on={value.seasons === k} onClick={() => set({ seasons: k })}>
                         {label}
@@ -176,6 +251,11 @@ export function Filters({
                     <Chip on={value.episodes == null} onClick={() => set({ episodes: null })}>
                       Any
                     </Chip>
+                    {value.episodes && !EPISODE_RANGES.some(([k]) => k === value.episodes) && (
+                      <Chip on onClick={() => set({ episodes: null })}>
+                        {rangeLabel(value.episodes)}
+                      </Chip>
+                    )}
                     {EPISODE_RANGES.map(([k, label]) => (
                       <Chip key={k} on={value.episodes === k} onClick={() => set({ episodes: k })}>
                         {label}
@@ -200,6 +280,15 @@ export function Filters({
               <Group label="Genres">
                 {GENRES.map((g) => (
                   <Chip key={g.key} on={value.genres.includes(g.key)} onClick={() => toggleGenre(g.key)}>
+                    {g.label}
+                  </Chip>
+                ))}
+              </Group>
+
+              <Group label="Hide genres">
+                {GENRES.map((g) => (
+                  <Chip key={g.key} on={excluded.includes(g.key)} onClick={() => toggleHidden(g.key)}>
+                    {excluded.includes(g.key) ? "✕ " : ""}
                     {g.label}
                   </Chip>
                 ))}

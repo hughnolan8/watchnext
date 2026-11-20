@@ -5,6 +5,8 @@ import type { Suggestion, TypeFilter } from "./types";
 export interface FilterState {
   type: TypeFilter;
   genres: string[];
+  /** Genres to hide, e.g. "no animated shows". */
+  excludeGenres: string[];
   minImdb: number | null;
   /** Show-only: a season / episode count range, e.g. "2-3" or "7-". */
   seasons: string | null;
@@ -14,6 +16,7 @@ export interface FilterState {
 export const DEFAULT_FILTERS: FilterState = {
   type: "all",
   genres: [],
+  excludeGenres: [],
   minImdb: null,
   seasons: null,
   episodes: null,
@@ -25,6 +28,14 @@ export function parseRange(r: string): [number, number] {
   const min = Number(lo) || 0;
   if (hi === undefined) return [min, min];
   return [min, hi === "" ? Infinity : Number(hi)];
+}
+
+/** "2-3" → "2–3"; "7-" → "7+"; "-10" → "Up to 10"; "1" → "1". */
+export function rangeLabel(r: string): string {
+  const [min, max] = parseRange(r);
+  if (max === Infinity) return `${min}+`;
+  if (min === 0) return `Up to ${max}`;
+  return min === max ? `${min}` : `${min}–${max}`;
 }
 
 function inRange(n: number | null | undefined, r: string | null): boolean {
@@ -44,6 +55,10 @@ export function applyFilters(results: Suggestion[], f: FilterState, hidden: Set<
       const ids = genreIdsFor(f.genres, s.type);
       if (!s.genreIds?.some((g) => ids.includes(g))) return false;
     }
+    if (f.excludeGenres?.length) {
+      const ids = genreIdsFor(f.excludeGenres, s.type);
+      if (s.genreIds?.some((g) => ids.includes(g))) return false;
+    }
     return true;
   });
 
@@ -55,6 +70,7 @@ export function activeFilterCount(f: FilterState): number {
   return (
     (f.type !== "all" ? 1 : 0) +
     (f.genres.length ? 1 : 0) +
+    (f.excludeGenres?.length ? 1 : 0) +
     (f.minImdb != null ? 1 : 0) +
     (f.seasons != null ? 1 : 0) +
     (f.episodes != null ? 1 : 0)
