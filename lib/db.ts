@@ -47,7 +47,7 @@ async function migrate(sql: NeonQueryFunction<false, false>) {
     )`;
   // Per-account app data that used to live only in the browser: favourites (seeds), hidden
   // titles and filters. One JSON value per key.
-  // Shared suggestions, rebuilt weekly by the cron job: the best titles on each popular
+  // Shared suggestions, rebuilt daily by the cron job: the best titles on each popular
   // service in each supported region (see lib/catalogue.ts). Everyone reads from this.
   await sql`
     CREATE TABLE IF NOT EXISTS catalogue (
@@ -56,6 +56,18 @@ async function migrate(sql: NeonQueryFunction<false, false>) {
       results     JSONB NOT NULL,
       built_at    BIGINT NOT NULL,
       PRIMARY KEY (region, provider_id)
+    )`;
+  // IMDb and Letterboxd ratings remembered between catalogue builds (see lib/ratingsCache.ts),
+  // so a bigger catalogue doesn't mean more OMDb lookups than the free tier allows.
+  await sql`
+    CREATE TABLE IF NOT EXISTS title_ratings (
+      key         TEXT PRIMARY KEY,
+      imdb_rating REAL,
+      imdb_votes  INTEGER,
+      lb_rating   REAL,
+      lb_votes    INTEGER,
+      lb_url      TEXT,
+      fetched_at  BIGINT NOT NULL
     )`;
   await sql`
     CREATE TABLE IF NOT EXISTS user_data (

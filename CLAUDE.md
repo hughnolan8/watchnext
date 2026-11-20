@@ -22,14 +22,14 @@ There is no test suite. "Verified" means `npm run lint` and `npm run build` pass
 - `components/` — client UI. `WatchNext.tsx` is the home page shell.
 - `lib/` — logic. Files that touch secrets or the DB start with `import "server-only"` (`db`, `auth`, `account`, `userData`, `catalogue`, `tmdb`, `omdb`, `letterboxd`, `api`). Files that run in the browser (`filter`, `describeFilter`, `rows`, `storage`, `titleFetch`, `genres`, `types`) must not import those.
 - `public/sw.js` — service worker. Bump `VERSION` whenever you change it.
-- `vercel.json` — weekly cron for `/api/cron/refresh-catalogue`.
+- `vercel.json` — daily cron for `/api/cron/refresh-catalogue`.
 
 ## Conventions
 
 - **API routes**: auth with `currentUser()` from `lib/auth` and return `401 { error: "unauthorised" }` if missing. Wrap upstream calls in `try { … } catch (e) { return errorResponse(e) }` from `lib/api`. Validate every input (`isRegion`, `cleanServices` in `lib/validate`, clamp string lengths with `.slice`). See `app/api/search/route.ts` as the model.
 - **Database**: schema lives only in `migrate()` in `lib/db.ts`, as idempotent `CREATE … IF NOT EXISTS` / `ALTER … IF NOT EXISTS`, **one statement per `sql` call** (the Neon HTTP driver can't run multi-statement strings). Always use the tagged template (`sql\`… ${value}\``) — never build SQL by string concatenation. Timestamps are `BIGINT` milliseconds (`Date.now()`).
 - **Per-account data** (favourites, hidden, filters) goes through `user_data` / `lib/userData.ts`; add a key to `USER_DATA_KEYS` rather than a new table.
-- **Shared suggestions** are built weekly into the `catalogue` table; the home page must not call TMDB/OMDb/Letterboxd per user. OMDb's free tier is 1,000 lookups/day and a full build uses ~720 — anything that adds OMDb calls must stay under that.
+- **Shared suggestions** are built daily into the `catalogue` table; the home page must not call TMDB/OMDb/Letterboxd per user. OMDb's free tier is 1,000 lookups/day; the build caches ratings in `title_ratings` and spends at most `OMDB_BUDGET` (750) new lookups a day — anything else that adds OMDb calls must fit in what's left.
 - **Images**: plain `<img>` with TMDB CDN URLs (`https://image.tmdb.org/…`) is intentional; only allow that host for user-supplied logos.
 - **Copy**: plain British English ("favourites", "colour"), short and friendly. No jargon in the UI.
 - **Comments**: explain *why*, not what. Keep the existing short doc-comment style.

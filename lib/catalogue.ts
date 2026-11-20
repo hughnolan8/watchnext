@@ -1,13 +1,14 @@
 import "server-only";
 import { db } from "./db";
+import { createRater } from "./ratingsCache";
 import { type PoolSize, recommend } from "./recommend";
 import type { Suggestion } from "./types";
 
 /**
- * The services we build shared suggestions for, per region. Suggestions are built once a week
+ * The services we build shared suggestions for, per region. Suggestions are built daily
  * by the cron job (app/api/cron/refresh-catalogue) and stored, so visitors cost no API calls.
- * IDs are TMDB watch-provider IDs. Each service costs up to CATALOGUE_POOL.rated OMDb lookups
- * per build (OMDb's free tier allows 1,000 a day), and ~CATALOGUE_POOL.shortlist TMDB calls.
+ * IDs are TMDB watch-provider IDs. Ratings are cached for a month (lib/ratingsCache.ts), so a
+ * build only spends OMDb lookups on titles it hasn't seen, capped at OMDB_BUDGET per run.
  */
 export const CATALOGUE: Record<string, { id: number; name: string }[]> = {
   GB: [
@@ -17,11 +18,33 @@ export const CATALOGUE: Record<string, { id: number; name: string }[]> = {
     { id: 350, name: "Apple TV" },
     { id: 531, name: "Paramount Plus" },
     { id: 38, name: "BBC iPlayer" },
+    { id: 39, name: "NOW" },
+    { id: 29, name: "Sky Go" },
+    { id: 41, name: "ITVX" },
+    { id: 103, name: "Channel 4" },
+    { id: 11, name: "MUBI" },
   ],
 };
 
-/** Per service: 8 pages of best rated + 5 of most popular (per films and shows), the best 120 rated. */
-export const CATALOGUE_POOL: PoolSize = { ratedPages: 8, popularPages: 5, shortlist: 280, rated: 120 };
+/** Per service: 15 pages of best rated + 10 of most popular (per films and shows), the best 400 rated. */
+export const CATALOGUE_POOL: PoolSize = {
+  ratedPages: 15,
+  popularPages: 10,
+  shortlist: 700,
+  rated: 400,
+  // Lower than the quick-search defaults so smaller services (and UK shows) aren't cut to a handful.
+  minVotes: { movie: 150, tv: 50 },
+};
+
+/** New OMDb lookups per 24 hours. The free tier is 1,000 a day; the rest is left for people's own searches. */
+const OMDB_BUDGET = 750;
+/**
+ * Stop starting new services after this long. A cold service takes ~45s, so this leaves plenty of
+ * room inside the route's 300s limit (being cut off would lose that service's ratings).
+ */
+const TIME_BUDGET_MS = 120_000;
+/** Most titles sent to the home page, best first, so a long list of services stays quick on a phone. */
+const MAX_RESULTS = 1500;
 
 export interface CatalogueView {
   results: Suggestion[];
@@ -31,16 +54,34 @@ export interface CatalogueView {
   supportedIds: number[];
 }
 
-/** Rebuild stored suggestions for a region (all its catalogue services, or just `only`). */
+/**
+ * Rebuild stored suggestions for a region (all its catalogue services, or just `only`), the
+ * longest-unbuilt first. Runs daily; services that don't fit in the time budget go first next time.
+ */
 export async function buildCatalogue(region: string, only?: number[]) {
-  const services = (CATALOGUE[region] ?? []).filter((p) => !only || only.includes(p.id));
+  const runStarted = Date.now();
   const sql = await db();
-  const report: { provider: string; titles?: number; error?: string; ms: number }[] = [];
+  const builtRows = await sql`SELECT provider_id, built_at FROM catalogue WHERE region = ${region}`;
+  const builtAt = new Map(builtRows.map((r) => [Number(r.provider_id), Number(r.built_at)]));
+  const services = (CATALOGUE[region] ?? [])
+    .filter((p) => !only || only.includes(p.id))
+    .sort((a, b) => (builtAt.get(a.id) ?? 0) - (builtAt.get(b.id) ?? 0));
+  const rater = await createRater(sql, OMDB_BUDGET);
+  const report: { provider: string; titles?: number; error?: string; skipped?: string; ms: number }[] = [];
   // One service at a time, saving each as it finishes, so a failure keeps the rest.
   for (const p of services) {
     const started = Date.now();
+    if (started - runStarted > TIME_BUDGET_MS) {
+      report.push({ provider: p.name, skipped: "out of time, first in line next run", ms: 0 });
+      continue;
+    }
     try {
-      const { results } = await recommend({ region, providers: [p.id], seeds: [], exclude: [] }, CATALOGUE_POOL);
+      const { results } = await recommend(
+        { region, providers: [p.id], seeds: [], exclude: [] },
+        CATALOGUE_POOL,
+        (d) => rater.rate(d),
+      );
+      await rater.flush();
       await sql`
         INSERT INTO catalogue (region, provider_id, results, built_at)
         VALUES (${region}, ${p.id}, ${JSON.stringify(results)}::jsonb, ${Date.now()})
@@ -50,7 +91,7 @@ export async function buildCatalogue(region: string, only?: number[]) {
       report.push({ provider: p.name, error: e instanceof Error ? e.message : String(e), ms: Date.now() - started });
     }
   }
-  return report;
+  return { services: report, ratings: rater.stats() };
 }
 
 /** Stored suggestions for a user's services, merged across services and best first. */
@@ -90,6 +131,7 @@ export async function getCatalogue(region: string, providerIds: number[]): Promi
       const on = providers.map((p) => p.name).slice(0, 2).join(" & ");
       return { ...s, providers, reason: `Among the best rated on ${on}`, becauseOf: [] };
     })
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_RESULTS);
   return view;
 }

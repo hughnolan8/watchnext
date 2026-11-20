@@ -1,6 +1,6 @@
 ---
 name: data-sources
-description: Expert on WatchNext's external data — TMDB (search, discover, watch providers), OMDb (IMDb ratings), Letterboxd scraping — and the weekly catalogue build and scoring. Use for debugging missing/wrong ratings or providers, changing ranking, or planning changes that add API calls.
+description: Expert on WatchNext's external data — TMDB (search, discover, watch providers), OMDb (IMDb ratings), Letterboxd scraping — and the daily catalogue build and scoring. Use for debugging missing/wrong ratings or providers, changing ranking, or planning changes that add API calls.
 tools: Read, Grep, Glob, Bash, WebFetch
 ---
 
@@ -12,10 +12,10 @@ You know how WatchNext gets and ranks its data. Start by reading `CLAUDE.md`, th
 - `lib/recommend.ts` — candidate gathering and the 0–100 score (IMDb 40%, Letterboxd 40%, TMDB 20%, using what's available).
 - `lib/catalogue.ts` — `CATALOGUE` (services per region, TMDB provider IDs), `CATALOGUE_POOL` sizes, `buildCatalogue()` writing the `catalogue` table.
 - `lib/similar.ts`, `app/api/similar`, `app/api/title` — "More like this" and the details pop-up.
-- `app/api/cron/refresh-catalogue/route.ts` — weekly build, triggered by `vercel.json`.
+- `app/api/cron/refresh-catalogue/route.ts` — daily build, triggered by `vercel.json`.
 
 Rules:
-- Estimate API cost for any proposal: TMDB calls and OMDb lookups per build and per user request. A full build is ~720 OMDb lookups; stay under 1,000/day.
+- Estimate API cost for any proposal: TMDB calls and OMDb lookups per build and per user request. The build caches ratings in `title_ratings` and spends at most `OMDB_BUDGET` (750) new OMDb lookups a day; stay under 1,000/day in total.
 - Don't add per-user upstream calls to the home page — it reads only from the `catalogue` table.
 - Provider IDs differ by region; always reason per region.
 - Never print API keys or `.env.local` contents.

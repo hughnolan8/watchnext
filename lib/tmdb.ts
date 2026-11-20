@@ -211,6 +211,7 @@ export async function discover(
     minYear?: number;
     page?: number;
     sort?: "vote_average.desc" | "popularity.desc";
+    minVotes?: number; // TMDB votes needed; the defaults keep quick results to well-known titles
   },
 ) {
   const dateKey = type === "movie" ? "primary_release_date.gte" : "first_air_date.gte";
@@ -221,7 +222,7 @@ export async function discover(
     with_genres: opts.genreIds?.length ? opts.genreIds.join("|") : undefined,
     [dateKey]: opts.minYear ? `${opts.minYear}-01-01` : undefined,
     sort_by: opts.sort ?? "vote_average.desc",
-    "vote_count.gte": type === "movie" ? 400 : 150,
+    "vote_count.gte": opts.minVotes ?? (type === "movie" ? 400 : 150),
     page: opts.page ?? 1,
   });
   return data.results.map((r) => ({ ...r, media_type: type }));

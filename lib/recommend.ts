@@ -17,17 +17,33 @@ interface Candidate {
   likedBy: Set<string>; // seed titles that led here
 }
 
-/** How wide to search. The weekly catalogue build uses a bigger pool than the defaults. */
+/** How wide to search. The daily catalogue build uses a bigger pool than the defaults. */
 export interface PoolSize {
   ratedPages: number; // pages of "best rated" per type (20 titles each)
   popularPages: number; // pages of "most popular" per type, for variety beyond the classics
   shortlist: number; // candidates whose availability is checked
   rated: number; // available titles that get IMDb/Letterboxd ratings (1 OMDb call each)
+  minVotes?: { movie: number; tv: number }; // TMDB votes a title needs (default 400 films, 150 shows)
 }
 
 const DEFAULT_POOL: PoolSize = { ratedPages: 4, popularPages: 0, shortlist: SEED_POOL + DISCOVER_POOL, rated: RATED_POOL };
 
-export async function recommend(req: RecommendRequest, size: PoolSize = DEFAULT_POOL): Promise<RecommendResponse> {
+type Rate = (d: Details) => Promise<{ imdb: ImdbRating; lb: LetterboxdRating | null }>;
+
+const lookUpRatings: Rate = async (d) => {
+  const [imdb, lb] = await Promise.all([
+    getImdbRating(d.imdbId),
+    d.type === "movie" ? getLetterboxdRating(d.id) : Promise.resolve(null),
+  ]);
+  return { imdb, lb };
+};
+
+/** `rate` lets the catalogue build reuse cached ratings instead of looking every title up. */
+export async function recommend(
+  req: RecommendRequest,
+  size: PoolSize = DEFAULT_POOL,
+  rate: Rate = lookUpRatings,
+): Promise<RecommendResponse> {
   const warnings: string[] = [];
   const excluded = new Set(req.exclude);
   for (const s of req.seeds) excluded.add(`${s.type}:${s.id}`);
@@ -66,7 +82,7 @@ export async function recommend(req: RecommendRequest, size: PoolSize = DEFAULT_
   const found = await Promise.all(
     (["movie", "tv"] as const).flatMap((type) =>
       queries.map(({ page, sort }) =>
-        discover(type, { region: req.region, providers: req.providers, page, sort })
+        discover(type, { region: req.region, providers: req.providers, page, sort, minVotes: size.minVotes?.[type] })
           .then((items) => items.map((item) => ({ type, item })))
           .catch(() => []),
       ),
@@ -100,13 +116,7 @@ export async function recommend(req: RecommendRequest, size: PoolSize = DEFAULT_
   // 4. Ratings for the best available titles
   const rated = available.slice(0, size.rated);
   if (!process.env.OMDB_API_KEY) warnings.push("OMDB_API_KEY is not set, so IMDb ratings are missing.");
-  const ratings = await mapLimit(rated, 6, async ({ d }) => {
-    const [imdb, lb] = await Promise.all([
-      getImdbRating(d.imdbId),
-      d.type === "movie" ? getLetterboxdRating(d.id) : Promise.resolve(null),
-    ]);
-    return { imdb, lb };
-  });
+  const ratings = await mapLimit(rated, 8, ({ d }) => rate(d));
 
   // 5. Blend and explain
   const results: Suggestion[] = rated.map(({ c, d }, i) => {
