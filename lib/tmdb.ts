@@ -78,6 +78,7 @@ export interface Details {
   genreIds: number[];
   runtime: number | null; // minutes (movie) or typical episode length (tv)
   seasons: number | null;
+  episodes: number | null;
   imdbId: string | null;
   tmdbRating: number;
   tmdbVotes: number;
@@ -227,6 +228,7 @@ interface RawDetails {
   runtime?: number;
   episode_run_time?: number[];
   number_of_seasons?: number;
+  number_of_episodes?: number;
   imdb_id?: string | null;
   external_ids?: { imdb_id?: string | null };
   vote_average: number;
@@ -252,6 +254,7 @@ export async function getDetails(type: MediaType, id: number, region: string): P
     genreIds: d.genres.map((g) => g.id),
     runtime: type === "movie" ? d.runtime || null : d.episode_run_time?.[0] ?? null,
     seasons: type === "tv" ? d.number_of_seasons ?? null : null,
+    episodes: type === "tv" ? d.number_of_episodes ?? null : null,
     imdbId: d.imdb_id || d.external_ids?.imdb_id || null,
     tmdbRating: d.vote_average,
     tmdbVotes: d.vote_count,

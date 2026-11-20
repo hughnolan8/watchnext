@@ -44,6 +44,7 @@ export interface Suggestion {
   genreIds: number[];
   runtime: number | null;
   seasons: number | null;
+  episodes?: number | null; // total episodes for shows (missing on older saved picks)
   providers: ProviderInfo[];
   watchLink: string | null;
   imdb: RatingInfo;

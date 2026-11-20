@@ -47,7 +47,12 @@ export function metaLine(s: Suggestion) {
     s.year,
     s.type === "movie"
       ? s.runtime && `${Math.floor(s.runtime / 60)}h ${s.runtime % 60}m`
-      : s.seasons && `${s.seasons} season${s.seasons > 1 ? "s" : ""}`,
+      : [
+          s.seasons && `${s.seasons} season${s.seasons > 1 ? "s" : ""}`,
+          s.episodes && `${s.episodes} episode${s.episodes > 1 ? "s" : ""}`,
+        ]
+          .filter(Boolean)
+          .join(", "),
     s.genres.slice(0, 3).join(", "),
   ]
     .filter(Boolean)
