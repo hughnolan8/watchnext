@@ -5,10 +5,13 @@ Suggestions for films and TV that are streaming **on the services you already pa
 ## Setup
 
 ```bash
-npm install
-cp .env.example .env.local   # then add your keys
-npm run dev                  # http://localhost:3000
+npm run setup   # installs, links Vercel, pulls .env.local
+npm run dev     # http://localhost:3000
 ```
+
+`npm run setup` ([scripts/setup-local.sh](scripts/setup-local.sh)) checks Node 20+, runs `npm install`, logs you in to Vercel, links the `watchnext` project, pulls the Development environment variables (database URL and API keys) into `.env.local` (backing up any existing one), and checks the required ones are there. It's safe to re-run.
+
+You need access to the `hugh-nolans-projects` team on Vercel for the pull to work; ask the project owner to invite you. Without access, the script copies `.env.example` to `.env.local` and lists which values to fill in by hand (see **Keys** below).
 
 ### Keys
 
