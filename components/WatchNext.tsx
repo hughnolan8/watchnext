@@ -6,6 +6,7 @@ import { activeFilterCount, applyFilters, DEFAULT_FILTERS, type FilterState } fr
 import { buildRows, type Row } from "@/lib/rows";
 import { similarTo, type LikeSource } from "@/lib/similar";
 import { load, save } from "@/lib/storage";
+import { fetchTitle } from "@/lib/titleFetch";
 import type { CatalogueView } from "@/lib/catalogue";
 import type { Account, ProviderInfo, SearchResult, Seed, Suggestion } from "@/lib/types";
 import { AccountMenu } from "./AccountMenu";
@@ -146,9 +147,8 @@ export function WatchNext({
   const openSearchResult = (r: SearchResult) => {
     const req = ++loadReq.current;
     setTitleLoad({ title: r.title, failed: false });
-    fetch(`/api/title?type=${r.type}&id=${r.id}`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
-      .then((s: Suggestion) => {
+    fetchTitle(r)
+      .then((s) => {
         if (req !== loadReq.current) return;
         setTitleLoad(null);
         setOpen(s);

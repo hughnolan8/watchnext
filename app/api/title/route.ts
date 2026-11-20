@@ -14,8 +14,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "bad request" }, { status: 400 });
   }
   try {
-    const subs = await getSubscriptions(user.id, user.region);
-    return NextResponse.json(await titleDetails(type, id, user.region, subs.map((s) => s.id)));
+    // Subscriptions only matter at the end, so look them up while TMDB/OMDb/Letterboxd load.
+    const subs = getSubscriptions(user.id, user.region).then((xs) => xs.map((s) => s.id));
+    subs.catch(() => {}); // if TMDB fails first, don't leave this rejection unhandled
+    return NextResponse.json(await titleDetails(type, id, user.region, subs, { letterboxdTimeoutMs: 2500 }));
   } catch (e) {
     return errorResponse(e);
   }
