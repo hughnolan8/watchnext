@@ -169,7 +169,7 @@ export function WatchNext({
   return (
     <div className="pb-[calc(6rem+env(safe-area-inset-bottom))]">
       <header className={`relative z-40 sm:sticky sm:top-[env(safe-area-inset-top)] flex flex-wrap items-center justify-between gap-4 bg-gradient-to-b from-bg via-bg/90 to-bg/0 py-4 ${pad}`}>
-        <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
+        <h1 className="w-full text-center font-display text-2xl font-bold tracking-tight sm:w-auto sm:text-left sm:text-3xl">
           Watch<span className="text-accent">Next</span>
         </h1>
         <div className="flex w-full items-center gap-3 sm:w-auto">
