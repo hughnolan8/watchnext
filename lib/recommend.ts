@@ -17,7 +17,17 @@ interface Candidate {
   likedBy: Set<string>; // seed titles that led here
 }
 
-export async function recommend(req: RecommendRequest): Promise<RecommendResponse> {
+/** How wide to search. The weekly catalogue build uses a bigger pool than the defaults. */
+export interface PoolSize {
+  ratedPages: number; // pages of "best rated" per type (20 titles each)
+  popularPages: number; // pages of "most popular" per type, for variety beyond the classics
+  shortlist: number; // candidates whose availability is checked
+  rated: number; // available titles that get IMDb/Letterboxd ratings (1 OMDb call each)
+}
+
+const DEFAULT_POOL: PoolSize = { ratedPages: 4, popularPages: 0, shortlist: SEED_POOL + DISCOVER_POOL, rated: RATED_POOL };
+
+export async function recommend(req: RecommendRequest, size: PoolSize = DEFAULT_POOL): Promise<RecommendResponse> {
   const warnings: string[] = [];
   const excluded = new Set(req.exclude);
   for (const s of req.seeds) excluded.add(`${s.type}:${s.id}`);
@@ -47,11 +57,16 @@ export async function recommend(req: RecommendRequest): Promise<RecommendRespons
 
   // 2. Mix in the best-rated films and shows on your services, so the stored pool
   //    has plenty of variety for filtering. (Discover results are already on your services.)
-  const pages = req.seeds.length ? [1, 2] : [1, 2, 3, 4];
+  //    Popular titles are added too (when asked) so it isn't only the all-time classics.
+  const range = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
+  const queries = [
+    ...range(req.seeds.length ? 2 : size.ratedPages).map((page) => ({ page, sort: "vote_average.desc" as const })),
+    ...range(size.popularPages).map((page) => ({ page, sort: "popularity.desc" as const })),
+  ];
   const found = await Promise.all(
     (["movie", "tv"] as const).flatMap((type) =>
-      pages.map((page) =>
-        discover(type, { region: req.region, providers: req.providers, page })
+      queries.map(({ page, sort }) =>
+        discover(type, { region: req.region, providers: req.providers, page, sort })
           .then((items) => items.map((item) => ({ type, item })))
           .catch(() => []),
       ),
@@ -69,7 +84,7 @@ export async function recommend(req: RecommendRequest): Promise<RecommendRespons
   const fromSeeds = pool.filter((c) => c.likedBy.size > 0).slice(0, SEED_POOL);
   const fromDiscover = pool
     .filter((c) => c.likedBy.size === 0)
-    .slice(0, req.seeds.length ? DISCOVER_POOL : SEED_POOL + DISCOVER_POOL);
+    .slice(0, req.seeds.length ? DISCOVER_POOL : size.shortlist);
   const shortlist = [...fromSeeds, ...fromDiscover];
 
   const details = await mapLimit(shortlist, 8, (c) =>
@@ -83,7 +98,7 @@ export async function recommend(req: RecommendRequest): Promise<RecommendRespons
   });
 
   // 4. Ratings for the best available titles
-  const rated = available.slice(0, RATED_POOL);
+  const rated = available.slice(0, size.rated);
   if (!process.env.OMDB_API_KEY) warnings.push("OMDB_API_KEY is not set, so IMDb ratings are missing.");
   const ratings = await mapLimit(rated, 6, async ({ d }) => {
     const [imdb, lb] = await Promise.all([

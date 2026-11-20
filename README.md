@@ -38,7 +38,7 @@ Accounts live in Postgres (Neon, via `@neondatabase/serverless`). Passwords are 
 
 Suggestions are **built once a week on the server and shared by everyone**, so opening the app costs no TMDB, OMDb or Letterboxd calls.
 
-1. **Weekly build.** A Vercel cron job (`vercel.json`, Mondays 05:00 UTC) calls `/api/cron/refresh-catalogue`. For each popular service in `CATALOGUE` ([lib/catalogue.ts](lib/catalogue.ts)), currently Netflix, Prime Video, Disney+, Apple TV, Paramount+ and BBC iPlayer in the UK, it finds the best-rated films and shows on that service (TMDB discover), checks they're really streaming there, and fetches IMDb and Letterboxd ratings for the top 70. The results go in the `catalogue` table, one row per region and service. A full build takes under a minute and uses about 420 OMDb lookups.
+1. **Weekly build.** A Vercel cron job (`vercel.json`, Mondays 05:00 UTC) calls `/api/cron/refresh-catalogue`. For each popular service in `CATALOGUE` ([lib/catalogue.ts](lib/catalogue.ts)), currently Netflix, Prime Video, Disney+, Apple TV, Paramount+ and BBC iPlayer in the UK, it collects the best-rated and the most popular films and shows on that service (TMDB discover), checks they're really streaming there, and fetches IMDb and Letterboxd ratings for the best 120 (`CATALOGUE_POOL`). The results go in the `catalogue` table, one row per region and service. A full build takes under a minute and uses about 720 OMDb lookups (the free tier allows 1,000 a day).
 2. **Score.** 0–100, a weighted average of IMDb 40%, Letterboxd 40% and TMDB 20%, using whichever are available.
 3. **Your picks.** The home page merges the stored lists for the services on your account and ranks them by score. Services outside `CATALOGUE`, and regions without one, don't get suggestions yet. Add them to `CATALOGUE` to include them.
 
@@ -50,7 +50,7 @@ curl -H "Authorization: Bearer $CRON_SECRET" "http://localhost:3000/api/cron/ref
 
 Add `?region=GB&provider=8` to rebuild one service. In Vercel you can also press **Run** next to the job under Settings → Cron Jobs.
 
-Filters (films/shows, mood or genre, year, length, sort) run in the browser over those picks. "Loved it" saves a title to your favourites and hides it. "Seen it" and "Not for me" just hide it. Favourites don't change the shared suggestions.
+The home page groups them into rows of 12 (top picks, new, genres, acclaimed, per service, series, films), and each title appears in only one row. Filters (films/shows, mood or genre, year, length, sort) run in the browser over those picks. "Loved it" saves a title to your favourites and hides it. "Seen it" and "Not for me" just hide it. Favourites don't change the shared suggestions.
 
 ## Layout
 
