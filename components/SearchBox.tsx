@@ -30,6 +30,15 @@ export function SearchBox({
   // Enter shows every match in a full-screen list; typing goes back to the quick dropdown.
   const [all, setAll] = useState(false);
 
+  // Leaving search (click away, Escape, or closing the results) empties the box.
+  const exit = () => {
+    setQ("");
+    setResults([]);
+    setStatus("idle");
+    setOpen(false);
+    setAll(false);
+  };
+
   useEffect(() => {
     const query = q.trim();
     if (query.length < 2) {
@@ -59,7 +68,7 @@ export function SearchBox({
 
   useEffect(() => {
     if (!all) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !detailsOpen && setAll(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !detailsOpen && exit();
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     return () => {
@@ -70,23 +79,22 @@ export function SearchBox({
 
   useEffect(() => {
     if (!dismiss) return;
-    setAll(false);
-    setOpen(false);
+    exit();
   }, [dismiss]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || detailsOpen) return;
     const onDown = (e: MouseEvent) => {
-      if (!wrap.current?.contains(e.target as Node)) setOpen(false);
+      if (!wrap.current?.contains(e.target as Node)) exit();
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && exit();
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, detailsOpen]);
 
   const showPanel = open && !all && q.trim().length >= 2;
 
@@ -178,7 +186,7 @@ export function SearchBox({
             </div>
             <button
               type="button"
-              onClick={() => setAll(false)}
+              onClick={exit}
               aria-label="Close search results"
               className="rounded-full p-2 text-muted hover:bg-surface-2 hover:text-fg"
             >
