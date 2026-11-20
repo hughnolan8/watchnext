@@ -9,7 +9,17 @@ import { watchLinks } from "@/lib/watchLinks";
  * Search any show or film. Each result lists every service it streams on: the ones you pay for are
  * highlighted in full colour, the rest are greyed out. Titles not on any of your services are greyed out.
  */
-export function SearchBox({ subscriptions }: { subscriptions: ProviderInfo[] }) {
+export function SearchBox({
+  subscriptions,
+  onOpenTitle,
+  detailsOpen,
+  dismiss,
+}: {
+  subscriptions: ProviderInfo[];
+  onOpenTitle: (r: SearchResult) => void; // click a result: show its details pop-up
+  detailsOpen: boolean; // a details pop-up is on top, so Esc belongs to it
+  dismiss: number; // bump to close the dropdown and the full results list
+}) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
@@ -49,14 +59,20 @@ export function SearchBox({ subscriptions }: { subscriptions: ProviderInfo[] }) 
 
   useEffect(() => {
     if (!all) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setAll(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !detailsOpen && setAll(false);
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
-  }, [all]);
+  }, [all, detailsOpen]);
+
+  useEffect(() => {
+    if (!dismiss) return;
+    setAll(false);
+    setOpen(false);
+  }, [dismiss]);
 
   useEffect(() => {
     if (!open) return;
@@ -113,7 +129,7 @@ export function SearchBox({ subscriptions }: { subscriptions: ProviderInfo[] }) 
           {results.length > 0 && (
             <ul className="divide-y divide-line">
               {results.map((r) => (
-                <ResultRow key={`${r.type}:${r.id}`} r={r} mine={mine} />
+                <ResultRow key={`${r.type}:${r.id}`} r={r} mine={mine} onOpen={() => onOpenTitle(r)} />
               ))}
             </ul>
           )}
@@ -178,7 +194,7 @@ export function SearchBox({ subscriptions }: { subscriptions: ProviderInfo[] }) 
             {results.length > 0 && (
               <ul className="mx-auto grid max-w-6xl gap-x-6 divide-y divide-line md:grid-cols-2 md:divide-y-0">
                 {sortYoursFirst(results, mine).map((r) => (
-                  <ResultRow key={`${r.type}:${r.id}`} r={r} mine={mine} />
+                  <ResultRow key={`${r.type}:${r.id}`} r={r} mine={mine} onOpen={() => onOpenTitle(r)} />
                 ))}
               </ul>
             )}
@@ -195,7 +211,7 @@ function sortYoursFirst(results: SearchResult[], mine: Set<number>) {
   return [...results.filter(yours), ...results.filter((r) => !yours(r))];
 }
 
-function ResultRow({ r, mine }: { r: SearchResult; mine: Set<number> }) {
+function ResultRow({ r, mine, onOpen }: { r: SearchResult; mine: Set<number>; onOpen: () => void }) {
   const links = watchLinks(r);
   const yours = links.filter((l) => mine.has(l.provider.id));
   const others = links.filter((l) => !mine.has(l.provider.id));
@@ -203,12 +219,24 @@ function ResultRow({ r, mine }: { r: SearchResult; mine: Set<number> }) {
   const dim = canWatch ? "" : "opacity-50 grayscale";
 
   return (
-    <li className={`flex gap-3 p-3 ${canWatch ? "" : "bg-surface-2/40"}`}>
+    <li
+      onClick={onOpen}
+      className={`group flex cursor-pointer gap-3 p-3 transition hover:bg-surface-2 ${canWatch ? "" : "bg-surface-2/40"}`}
+    >
       <div className={`h-20 w-14 shrink-0 overflow-hidden rounded-md bg-surface-2 ${dim}`}>
         {r.poster && <img src={r.poster} alt="" loading="lazy" className="h-full w-full object-cover" />}
       </div>
       <div className="min-w-0 flex-1">
-        <p className={`truncate text-sm font-semibold ${canWatch ? "" : "text-muted"}`}>{r.title}</p>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen();
+          }}
+          className={`block max-w-full truncate text-left text-sm font-semibold group-hover:underline ${canWatch ? "" : "text-muted"}`}
+        >
+          {r.title}
+        </button>
         <p className="text-xs text-muted">{[r.type === "movie" ? "Film" : "Show", r.year].filter(Boolean).join(" · ")}</p>
 
         <p className={`mt-1 text-xs font-semibold ${canWatch ? "text-good" : "text-muted"}`}>
@@ -225,6 +253,7 @@ function ResultRow({ r, mine }: { r: SearchResult; mine: Set<number> }) {
                     href={url}
                     target="_blank"
                     rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
                     title={has ? `Watch on ${provider.name} (you have it)` : `On ${provider.name} (you don't have it)`}
                     className={`flex items-center gap-1.5 rounded-full py-0.5 pl-0.5 pr-2 text-[11px] transition ${
                       has
@@ -242,7 +271,12 @@ function ResultRow({ r, mine }: { r: SearchResult; mine: Set<number> }) {
           </ul>
         )}
         {!links.length && r.watchLink && (
-          <a href={r.watchLink} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-muted hover:text-fg hover:underline">
+          <a
+            href={r.watchLink}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="mt-1 inline-block text-xs text-muted hover:text-fg hover:underline">
             Rent / buy ↗
           </a>
         )}

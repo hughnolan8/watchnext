@@ -1,6 +1,6 @@
 import "server-only";
-import { getImdbRating } from "./omdb";
-import { getLetterboxdRating } from "./letterboxd";
+import { getImdbRating, type ImdbRating } from "./omdb";
+import { getLetterboxdRating, type LetterboxdRating } from "./letterboxd";
 import { discover, getDetails, getRelated, type Details, type TmdbListItem } from "./tmdb";
 import type { MediaType, RecommendRequest, RecommendResponse, Suggestion } from "./types";
 
@@ -111,12 +111,7 @@ export async function recommend(req: RecommendRequest, size: PoolSize = DEFAULT_
   // 5. Blend and explain
   const results: Suggestion[] = rated.map(({ c, d }, i) => {
     const { imdb, lb } = ratings[i];
-    const parts: [number, number][] = []; // [score 0-100, weight]
-    if (imdb.rating != null) parts.push([imdb.rating * 10, 0.4]);
-    if (lb?.rating != null) parts.push([lb.rating * 20, 0.4]);
-    if (d.tmdbVotes >= 50) parts.push([d.tmdbRating * 10, 0.2]);
-    const totalW = parts.reduce((s, [, w]) => s + w, 0);
-    const quality = totalW ? parts.reduce((s, [v, w]) => s + v * w, 0) / totalW : 50;
+    const quality = qualityScore(d, imdb, lb);
     const affinity = req.seeds.length ? (c.affinity / maxAffinity) * 100 : 0;
     const score = req.seeds.length ? 0.65 * quality + 0.35 * affinity : quality;
 
@@ -127,41 +122,80 @@ export async function recommend(req: RecommendRequest, size: PoolSize = DEFAULT_
       ? `Because you liked ${listJoin(liked.slice(0, 3))} · on ${on}`
       : `Among the best rated on ${on}`;
 
-    return {
-      key: c.key,
-      id: d.id,
-      type: d.type,
-      title: d.title,
-      year: d.year,
-      overview: d.overview,
-      poster: d.poster,
-      backdrop: d.backdrop,
-      genres: d.genres,
-      genreIds: d.genreIds,
-      runtime: d.runtime,
-      seasons: d.seasons,
-      episodes: d.episodes,
-      providers: providers.map(({ id, name, logo }) => ({ id, name, logo })),
-      watchLink: d.watchLink,
-      imdb: {
-        rating: imdb.rating,
-        votes: imdb.votes,
-        url: d.imdbId ? `https://www.imdb.com/title/${d.imdbId}/` : null,
-      },
-      letterboxd: lb ? { rating: lb.rating, votes: lb.votes, url: lb.url } : null,
-      tmdb: {
-        rating: d.tmdbVotes ? d.tmdbRating : null,
-        votes: d.tmdbVotes,
-        url: `https://www.themoviedb.org/${d.type}/${d.id}`,
-      },
-      score: Math.round(score),
-      reason,
-      becauseOf: liked,
-    };
+    return { ...toSuggestion(d, imdb, lb, providers, Math.round(score), reason), becauseOf: liked };
   });
 
   results.sort((a, b) => b.score - a.score);
   return { results: results.filter((r) => r.score >= 50), warnings };
+}
+
+/** Blended rating 0–100 from IMDb, Letterboxd and TMDB (50 when there's nothing to go on). */
+function qualityScore(d: Details, imdb: ImdbRating, lb: LetterboxdRating | null) {
+  const parts: [number, number][] = []; // [score 0-100, weight]
+  if (imdb.rating != null) parts.push([imdb.rating * 10, 0.4]);
+  if (lb?.rating != null) parts.push([lb.rating * 20, 0.4]);
+  if (d.tmdbVotes >= 50) parts.push([d.tmdbRating * 10, 0.2]);
+  const totalW = parts.reduce((s, [, w]) => s + w, 0);
+  return totalW ? parts.reduce((s, [v, w]) => s + v * w, 0) / totalW : 50;
+}
+
+function toSuggestion(
+  d: Details,
+  imdb: ImdbRating,
+  lb: LetterboxdRating | null,
+  providers: Details["streaming"],
+  score: number,
+  reason: string,
+): Suggestion {
+  return {
+    key: `${d.type}:${d.id}`,
+    id: d.id,
+    type: d.type,
+    title: d.title,
+    year: d.year,
+    overview: d.overview,
+    poster: d.poster,
+    backdrop: d.backdrop,
+    genres: d.genres,
+    genreIds: d.genreIds,
+    runtime: d.runtime,
+    seasons: d.seasons,
+    episodes: d.episodes,
+    providers: providers.map(({ id, name, logo }) => ({ id, name, logo })),
+    watchLink: d.watchLink,
+    imdb: {
+      rating: imdb.rating,
+      votes: imdb.votes,
+      url: d.imdbId ? `https://www.imdb.com/title/${d.imdbId}/` : null,
+    },
+    letterboxd: lb ? { rating: lb.rating, votes: lb.votes, url: lb.url } : null,
+    tmdb: {
+      rating: d.tmdbVotes ? d.tmdbRating : null,
+      votes: d.tmdbVotes,
+      url: `https://www.themoviedb.org/${d.type}/${d.id}`,
+    },
+    score,
+    reason,
+    becauseOf: [],
+  };
+}
+
+/** Full details for any one title (e.g. a search hit), in the same shape as a suggestion. */
+export async function titleDetails(type: MediaType, id: number, region: string, providerIds: number[]) {
+  const d = await getDetails(type, id, region);
+  const [imdb, lb] = await Promise.all([
+    getImdbRating(d.imdbId),
+    type === "movie" ? getLetterboxdRating(d.id) : Promise.resolve(null),
+  ]);
+  const mine = new Set(providerIds);
+  const yours = d.streaming.filter((p) => mine.has(p.id));
+  const reason = yours.length
+    ? `On your services: ${listJoin(yours.map((p) => p.name).slice(0, 3))}`
+    : d.streaming.length
+      ? `Not on your services · streaming on ${listJoin(d.streaming.map((p) => p.name).slice(0, 2))}`
+      : "Not streaming on any service in your region";
+  // Watch buttons: your services if it's on any, otherwise wherever it streams.
+  return toSuggestion(d, imdb, lb, yours.length ? yours : d.streaming.slice(0, 3), Math.round(qualityScore(d, imdb, lb)), reason);
 }
 
 function listJoin(xs: string[]) {

@@ -115,7 +115,7 @@ export function TitleDetails({
   const image = s.backdrop ?? s.poster;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-6">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} aria-hidden />
       <div
         ref={ref}
