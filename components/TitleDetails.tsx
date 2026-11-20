@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { Suggestion } from "@/lib/types";
 import { watchLinks } from "@/lib/watchLinks";
-import { scoreColour } from "./PosterRow";
+import { scoreColour, SparkIcon } from "./PosterRow";
 
 const compact = new Intl.NumberFormat("en-GB", { notation: "compact", maximumFractionDigits: 1 });
 
@@ -89,12 +89,14 @@ export function TitleDetails({
   onLoved,
   onSeen,
   onNotForMe,
+  onMoreLike,
 }: {
   s: Suggestion;
   onClose: () => void;
   onLoved: () => void;
   onSeen: () => void;
   onNotForMe: () => void;
+  onMoreLike: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -146,7 +148,17 @@ export function TitleDetails({
             <h2 id="title-details" className="font-display text-2xl font-bold leading-tight sm:text-4xl">
               {s.title}
             </h2>
-            <WatchButtons s={s} />
+            <div className="flex flex-wrap items-center gap-2">
+              <WatchButtons s={s} />
+              <button
+                type="button"
+                onClick={onMoreLike}
+                className="inline-flex items-center gap-2 rounded-lg bg-white/15 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/25"
+              >
+                <SparkIcon className="h-4 w-4" />
+                More like this
+              </button>
+            </div>
           </div>
         </div>
 
