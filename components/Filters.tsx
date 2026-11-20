@@ -146,7 +146,9 @@ export function Filters({
                     <button
                       key={k}
                       type="button"
-                      onClick={() => set({ type: k })}
+                      onClick={() =>
+                        set(k === "movie" ? { type: k, seasons: null, episodes: null } : { type: k })
+                      }
                       className={`rounded-full px-4 py-1 text-sm ${
                         value.type === k ? "bg-fg text-bg" : "text-muted hover:text-fg"
                       }`}
@@ -168,27 +170,31 @@ export function Filters({
                 ))}
               </Group>
 
-              <Group label="Seasons (shows)">
-                <Chip on={value.seasons == null} onClick={() => set({ seasons: null })}>
-                  Any
-                </Chip>
-                {SEASON_RANGES.map(([k, label]) => (
-                  <Chip key={k} on={value.seasons === k} onClick={() => set({ seasons: k })}>
-                    {label}
-                  </Chip>
-                ))}
-              </Group>
+              {value.type !== "movie" && (
+                <>
+                  <Group label="Seasons (shows)">
+                    <Chip on={value.seasons == null} onClick={() => set({ seasons: null })}>
+                      Any
+                    </Chip>
+                    {SEASON_RANGES.map(([k, label]) => (
+                      <Chip key={k} on={value.seasons === k} onClick={() => set({ seasons: k })}>
+                        {label}
+                      </Chip>
+                    ))}
+                  </Group>
 
-              <Group label="Episodes in total (shows)">
-                <Chip on={value.episodes == null} onClick={() => set({ episodes: null })}>
-                  Any
-                </Chip>
-                {EPISODE_RANGES.map(([k, label]) => (
-                  <Chip key={k} on={value.episodes === k} onClick={() => set({ episodes: k })}>
-                    {label}
-                  </Chip>
-                ))}
-              </Group>
+                  <Group label="Episodes in total (shows)">
+                    <Chip on={value.episodes == null} onClick={() => set({ episodes: null })}>
+                      Any
+                    </Chip>
+                    {EPISODE_RANGES.map(([k, label]) => (
+                      <Chip key={k} on={value.episodes === k} onClick={() => set({ episodes: k })}>
+                        {label}
+                      </Chip>
+                    ))}
+                  </Group>
+                </>
+              )}
 
               <Group label="Mood">
                 {MOODS.map((m) => (
