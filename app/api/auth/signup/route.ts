@@ -13,9 +13,9 @@ export async function POST(req: NextRequest) {
   if (!EMAIL_RE.test(email) || email.length > 254) return NextResponse.json({ error: "bad_email" }, { status: 400 });
   if (password.length < MIN_PASSWORD || password.length > 200)
     return NextResponse.json({ error: "weak_password", min: MIN_PASSWORD }, { status: 400 });
-  if (findUserByEmail(email)) return NextResponse.json({ error: "email_taken" }, { status: 409 });
+  if (await findUserByEmail(email)) return NextResponse.json({ error: "email_taken" }, { status: 409 });
 
-  const userId = createUser(email, name, await hashPassword(password), isRegion(region) ? region : "GB");
+  const userId = await createUser(email, name, await hashPassword(password), isRegion(region) ? region : "GB");
 
   await startSession(userId);
   return NextResponse.json({ ok: true });

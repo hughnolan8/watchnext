@@ -17,15 +17,19 @@ npm run dev                  # http://localhost:3000
 | `TMDB_API_KEY` | Everything: search, recommendations, which service has what | Free at <https://www.themoviedb.org/settings/api> (v3 key or v4 read token both work) |
 | `OMDB_API_KEY` | IMDb ratings | Free at <https://www.omdbapi.com/apikey.aspx> (1,000 lookups/day) |
 | `DEFAULT_REGION` | Default streaming country for new accounts | Two-letter code, `GB` by default. Users can change it on their Account page. |
-| `DATABASE_PATH` | Where accounts are stored | Optional. SQLite file, `data/watchnext.db` by default (git-ignored). |
+| `DATABASE_URL` | Accounts and subscriptions | Postgres connection string. Free from [Neon](https://neon.tech), or added for you by Vercel's Neon integration. Tables are created automatically on first use. |
 
 Letterboxd needs no key. It has no public API, so the server reads the average rating from each film's public page (`letterboxd.com/tmdb/{id}`). If that fails, the card shows "—". Letterboxd only covers films, so shows have no Letterboxd rating.
+
+## Deploying to Vercel
+
+The repo deploys to Vercel as a standard Next.js project; every push to `main` goes to production and every other branch gets a preview URL. In the Vercel project, add the **Neon** integration (Storage tab) so `DATABASE_URL` is set, and add `TMDB_API_KEY`, `OMDB_API_KEY` and `DEFAULT_REGION` under Settings → Environment Variables.
 
 ## Accounts and subscriptions
 
 You sign up with an email and password. Each account stores the streaming services you subscribe to, so they follow you to any device. New accounts go straight to picking their services; you can change them any time from **Account** (top right), along with your name and region. Subscriptions are saved per region, because service IDs differ by country.
 
-Accounts live in a SQLite file using Node's built-in `node:sqlite` (needs Node 22.13 or newer, nothing to install). Passwords are hashed with scrypt; sessions are a random token in an httpOnly cookie, with only its hash stored. Favourites, filters, hidden titles and saved picks are still kept in the browser, separately for each account.
+Accounts live in Postgres (Neon, via `@neondatabase/serverless`). Passwords are hashed with scrypt; sessions are a random token in an httpOnly cookie, with only its hash stored. Favourites, filters, hidden titles and saved picks are still kept in the browser, separately for each account.
 
 ## How suggestions work
 
@@ -44,7 +48,7 @@ Accounts live in a SQLite file using Node's built-in `node:sqlite` (needs Node 2
 app/api/{regions,providers,search,recommend}/route.ts   server endpoints (keys stay server-side)
 app/api/auth/{signup,login,logout}, app/api/account      accounts and subscriptions
 app/{login,signup,account}/page.tsx                      sign-in, sign-up, account settings
-lib/db.ts, lib/auth.ts, lib/account.ts                   SQLite schema, sessions, account queries
+lib/db.ts, lib/auth.ts, lib/account.ts                   Postgres schema, sessions, account queries
 lib/tmdb.ts, lib/omdb.ts, lib/letterboxd.ts              data sources
 lib/recommend.ts                                         candidate gathering, filtering, scoring
 components/                                              UI

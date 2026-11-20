@@ -13,7 +13,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   return (
     <AccountSettings
       user={user}
-      initialSubscriptions={getSubscriptions(user.id, user.region)}
+      initialSubscriptions={await getSubscriptions(user.id, user.region)}
       welcome={welcome === "1"}
       hasTmdb={!!process.env.TMDB_API_KEY?.trim()}
     />

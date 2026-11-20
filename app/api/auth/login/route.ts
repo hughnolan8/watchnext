@@ -10,11 +10,11 @@ export async function POST(req: NextRequest) {
   const email = String(body?.email ?? "").trim().toLowerCase();
   const password = String(body?.password ?? "").slice(0, 200);
 
-  const user = email ? findUserByEmail(email) : undefined;
+  const user = email ? await findUserByEmail(email) : undefined;
   const ok = await verifyPassword(password, user?.password_hash ?? (await dummyHash));
   if (!user || !ok) return NextResponse.json({ error: "bad_credentials" }, { status: 401 });
 
-  cleanExpiredSessions();
+  await cleanExpiredSessions();
   await startSession(user.id);
   return NextResponse.json({ ok: true });
 }

@@ -11,6 +11,6 @@ export async function PUT(req: NextRequest) {
   const body = await req.json().catch(() => null);
   if (!isRegion(body?.region)) return NextResponse.json({ error: "bad_region" }, { status: 400 });
   const services = cleanServices(body.services);
-  setSubscriptions(user.id, body.region, services);
+  await setSubscriptions(user.id, body.region, services);
   return NextResponse.json({ ok: true, count: services.length });
 }

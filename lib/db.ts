@@ -1,53 +1,62 @@
 import "server-only";
-import { mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 
-// One SQLite file holds accounts, sessions and each account's subscriptions.
-// Uses Node's built-in SQLite (Node 22.13+), so there's nothing extra to install.
+// Postgres (Neon) holds accounts, sessions and each account's subscriptions.
+// On Vercel, adding the Neon integration sets DATABASE_URL for you. Locally, put it in .env.local.
 
-const DB_PATH = resolve(process.env.DATABASE_PATH?.trim() || "data/watchnext.db");
+const globalForDb = globalThis as unknown as {
+  watchnextSql?: NeonQueryFunction<false, false>;
+  watchnextSchema?: Promise<void>;
+};
 
-const globalForDb = globalThis as unknown as { watchnextDb?: DatabaseSync };
+function connect() {
+  const url = (process.env.DATABASE_URL || process.env.POSTGRES_URL)?.trim();
+  if (!url) throw new Error("DATABASE_URL is not set. Add a Postgres (Neon) database; see README.");
+  return neon(url);
+}
 
-function open() {
-  mkdirSync(dirname(DB_PATH), { recursive: true });
-  const db = new DatabaseSync(DB_PATH, { timeout: 5000 });
-  db.exec(`
-    PRAGMA journal_mode = WAL;
-    PRAGMA foreign_keys = ON;
-
+async function migrate(sql: NeonQueryFunction<false, false>) {
+  // One statement per call: the HTTP driver doesn't run multi-statement strings.
+  await sql`
     CREATE TABLE IF NOT EXISTS users (
-      id            INTEGER PRIMARY KEY,
-      email         TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      id            SERIAL PRIMARY KEY,
+      email         TEXT NOT NULL,
       name          TEXT NOT NULL DEFAULT '',
       password_hash TEXT NOT NULL,
       region        TEXT NOT NULL,
-      created_at    INTEGER NOT NULL
-    );
-
+      created_at    BIGINT NOT NULL
+    )`;
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower ON users (lower(email))`;
+  await sql`
     CREATE TABLE IF NOT EXISTS sessions (
       token_hash TEXT PRIMARY KEY,
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      expires_at INTEGER NOT NULL
-    );
-
-    -- A user's subscriptions, per region (service IDs differ between countries).
-    -- Name and logo are kept so the home page can show them without calling TMDB.
+      expires_at BIGINT NOT NULL
+    )`;
+  // A user's subscriptions, per region (service IDs differ between countries).
+  // Name and logo are kept so the home page can show them without calling TMDB.
+  await sql`
     CREATE TABLE IF NOT EXISTS subscriptions (
       user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       region      TEXT NOT NULL,
       provider_id INTEGER NOT NULL,
       name        TEXT NOT NULL,
       logo        TEXT NOT NULL,
-      added_at    INTEGER NOT NULL,
+      added_at    BIGINT NOT NULL,
       PRIMARY KEY (user_id, region, provider_id)
-    );
-  `);
-  return db;
+    )`;
 }
 
-/** Opened on first use (not at import, so builds never touch the file) and reused across hot reloads. */
-export function db() {
-  return (globalForDb.watchnextDb ??= open());
+/**
+ * The SQL client, with tables created on first use in each server instance.
+ * Connected lazily (not at import) so builds never need the database.
+ */
+export async function db() {
+  const sql = (globalForDb.watchnextSql ??= connect());
+  globalForDb.watchnextSchema ??= migrate(sql).catch((e) => {
+    globalForDb.watchnextSchema = undefined; // retry next time
+    throw e;
+  });
+  await globalForDb.watchnextSchema;
+  return sql;
 }
