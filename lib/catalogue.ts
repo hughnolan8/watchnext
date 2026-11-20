@@ -1,12 +1,13 @@
 import "server-only";
 import { db } from "./db";
-import { recommend } from "./recommend";
+import { type PoolSize, recommend } from "./recommend";
 import type { Suggestion } from "./types";
 
 /**
  * The services we build shared suggestions for, per region. Suggestions are built once a week
  * by the cron job (app/api/cron/refresh-catalogue) and stored, so visitors cost no API calls.
- * IDs are TMDB watch-provider IDs. Each service costs ~70 OMDb lookups per weekly build.
+ * IDs are TMDB watch-provider IDs. Each service costs up to CATALOGUE_POOL.rated OMDb lookups
+ * per build (OMDb's free tier allows 1,000 a day), and ~CATALOGUE_POOL.shortlist TMDB calls.
  */
 export const CATALOGUE: Record<string, { id: number; name: string }[]> = {
   GB: [
@@ -18,6 +19,9 @@ export const CATALOGUE: Record<string, { id: number; name: string }[]> = {
     { id: 38, name: "BBC iPlayer" },
   ],
 };
+
+/** Per service: 8 pages of best rated + 5 of most popular (per films and shows), the best 120 rated. */
+export const CATALOGUE_POOL: PoolSize = { ratedPages: 8, popularPages: 5, shortlist: 280, rated: 120 };
 
 export interface CatalogueView {
   results: Suggestion[];
@@ -36,7 +40,7 @@ export async function buildCatalogue(region: string, only?: number[]) {
   for (const p of services) {
     const started = Date.now();
     try {
-      const { results } = await recommend({ region, providers: [p.id], seeds: [], exclude: [] });
+      const { results } = await recommend({ region, providers: [p.id], seeds: [], exclude: [] }, CATALOGUE_POOL);
       await sql`
         INSERT INTO catalogue (region, provider_id, results, built_at)
         VALUES (${region}, ${p.id}, ${JSON.stringify(results)}::jsonb, ${Date.now()})
