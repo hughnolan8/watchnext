@@ -14,6 +14,19 @@ const SORTS: [SortKey, string][] = [
 const YEARS = [2024, 2020, 2015, 2010, 2000, 1990, 1980];
 const RUNTIMES = [30, 60, 90, 120, 150];
 const IMDB_MINS = [6, 6.5, 7, 7.5, 8, 8.5];
+const SEASON_RANGES: [string, string][] = [
+  ["1", "1"],
+  ["2-3", "2–3"],
+  ["4-6", "4–6"],
+  ["7-", "7+"],
+];
+const EPISODE_RANGES: [string, string][] = [
+  ["-10", "Up to 10"],
+  ["11-30", "11–30"],
+  ["31-60", "31–60"],
+  ["61-100", "61–100"],
+  ["101-", "100+"],
+];
 
 function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
@@ -162,6 +175,28 @@ export function Filters({
                 {IMDB_MINS.map((r) => (
                   <Chip key={r} on={value.minImdb === r} onClick={() => set({ minImdb: r })}>
                     {r.toFixed(1)}+
+                  </Chip>
+                ))}
+              </Group>
+
+              <Group label="Seasons (shows)">
+                <Chip on={value.seasons == null} onClick={() => set({ seasons: null })}>
+                  Any
+                </Chip>
+                {SEASON_RANGES.map(([k, label]) => (
+                  <Chip key={k} on={value.seasons === k} onClick={() => set({ seasons: k })}>
+                    {label}
+                  </Chip>
+                ))}
+              </Group>
+
+              <Group label="Episodes in total (shows)">
+                <Chip on={value.episodes == null} onClick={() => set({ episodes: null })}>
+                  Any
+                </Chip>
+                {EPISODE_RANGES.map(([k, label]) => (
+                  <Chip key={k} on={value.episodes === k} onClick={() => set({ episodes: k })}>
+                    {label}
                   </Chip>
                 ))}
               </Group>

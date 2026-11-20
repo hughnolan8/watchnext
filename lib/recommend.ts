@@ -140,6 +140,7 @@ export async function recommend(req: RecommendRequest, size: PoolSize = DEFAULT_
       genreIds: d.genreIds,
       runtime: d.runtime,
       seasons: d.seasons,
+      episodes: d.episodes,
       providers: providers.map(({ id, name, logo }) => ({ id, name, logo })),
       watchLink: d.watchLink,
       imdb: {

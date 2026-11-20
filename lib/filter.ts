@@ -10,6 +10,9 @@ export interface FilterState {
   minYear: number | null;
   maxRuntime: number | null;
   minImdb: number | null;
+  /** Show-only: a season / episode count range, e.g. "2-3" or "7-". */
+  seasons: string | null;
+  episodes: string | null;
   sort: SortKey;
 }
 
@@ -19,8 +22,24 @@ export const DEFAULT_FILTERS: FilterState = {
   minYear: null,
   maxRuntime: null,
   minImdb: null,
+  seasons: null,
+  episodes: null,
   sort: "score",
 };
+
+/** "2-3" → [2, 3]; "7-" → [7, Infinity]; "1" → [1, 1]. */
+export function parseRange(r: string): [number, number] {
+  const [lo, hi] = r.split("-");
+  const min = Number(lo) || 0;
+  if (hi === undefined) return [min, min];
+  return [min, hi === "" ? Infinity : Number(hi)];
+}
+
+function inRange(n: number | null | undefined, r: string | null): boolean {
+  if (!r || n == null) return true; // unknown counts (older saved picks) aren't filtered out
+  const [min, max] = parseRange(r);
+  return n >= min && n <= max;
+}
 
 export function applyFilters(results: Suggestion[], f: FilterState, hidden: Set<string>): Suggestion[] {
   const out = results.filter((s) => {
@@ -29,6 +48,8 @@ export function applyFilters(results: Suggestion[], f: FilterState, hidden: Set<
     if (f.minYear && (!s.year || s.year < f.minYear)) return false;
     if (f.maxRuntime && s.runtime && s.runtime > f.maxRuntime) return false;
     if (f.minImdb && (s.imdb.rating == null || s.imdb.rating < f.minImdb)) return false;
+    if ((f.seasons || f.episodes) && s.type !== "tv") return false;
+    if (!inRange(s.seasons, f.seasons) || !inRange(s.episodes, f.episodes)) return false;
     if (f.genres.length) {
       const ids = genreIdsFor(f.genres, s.type);
       if (!s.genreIds?.some((g) => ids.includes(g))) return false;
@@ -53,6 +74,8 @@ export function activeFilterCount(f: FilterState): number {
     (f.genres.length ? 1 : 0) +
     (f.minYear != null ? 1 : 0) +
     (f.maxRuntime != null ? 1 : 0) +
-    (f.minImdb != null ? 1 : 0)
+    (f.minImdb != null ? 1 : 0) +
+    (f.seasons != null ? 1 : 0) +
+    (f.episodes != null ? 1 : 0)
   );
 }
