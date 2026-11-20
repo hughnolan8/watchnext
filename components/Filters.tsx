@@ -113,7 +113,7 @@ export function Filters({
             aria-modal="true"
             aria-labelledby="filters-title"
             tabIndex={-1}
-            className="relative flex max-h-[90vh] w-full max-w-xl flex-col rounded-t-2xl border border-line bg-surface shadow-2xl outline-none sm:rounded-2xl"
+            className="relative flex max-h-[90dvh] w-full max-w-xl flex-col overscroll-contain rounded-t-2xl border border-line bg-surface shadow-2xl outline-none sm:rounded-2xl"
           >
             <div className="flex items-center justify-between border-b border-line px-5 py-4">
               <h2 id="filters-title" className="font-display text-xl font-semibold">
@@ -235,7 +235,7 @@ export function Filters({
               </Group>
             </div>
 
-            <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-4">
+            <div className="flex items-center justify-between gap-3 border-t border-line px-5 pt-4 pb-safe-4">
               <button
                 type="button"
                 onClick={() => onChange({ ...DEFAULT_FILTERS, sort: value.sort })}

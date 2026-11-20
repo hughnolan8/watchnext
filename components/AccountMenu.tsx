@@ -5,6 +5,11 @@ import type { Account } from "@/lib/types";
 
 export async function signOut() {
   await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+  // Drop pages the service worker kept for offline use, so the next person on this device can't see them
+  if ("caches" in window) {
+    const keys = await caches.keys().catch(() => [] as string[]);
+    await Promise.all(keys.filter((k) => k.startsWith("wn-pages-")).map((k) => caches.delete(k)));
+  }
   window.location.assign("/login");
 }
 

@@ -187,7 +187,7 @@ export function AccountSettings({
         </section>
       </div>
 
-      <div className="sticky bottom-0 mt-6 flex flex-wrap items-center gap-4 border-t border-line bg-bg/90 py-4 backdrop-blur">
+      <div className="sticky bottom-0 mt-6 flex flex-wrap items-center gap-4 border-t border-line bg-bg/90 pt-4 pb-safe-4 backdrop-blur">
         <button
           type="button"
           onClick={save}
