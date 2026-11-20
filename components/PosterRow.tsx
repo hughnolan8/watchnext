@@ -28,7 +28,7 @@ function Arrow({ dir, onClick, show }: { dir: "left" | "right"; onClick: () => v
   );
 }
 
-function PosterCard({ s, onOpen }: { s: Suggestion; onOpen: () => void }) {
+function PosterCard({ s, onOpen, onMoreLike }: { s: Suggestion; onOpen: () => void; onMoreLike?: () => void }) {
   const first = watchLinks(s)[0];
   return (
     <div className="group/card relative w-36 shrink-0 snap-start sm:w-40 lg:w-44">
@@ -75,9 +75,28 @@ function PosterCard({ s, onOpen }: { s: Suggestion; onOpen: () => void }) {
               {first.provider.name}
             </a>
           )}
+          {onMoreLike && (
+            <button
+              type="button"
+              onClick={onMoreLike}
+              className="pointer-events-auto mt-1.5 flex w-full items-center justify-center gap-1 rounded-md bg-white/15 py-1 text-xs font-semibold text-white backdrop-blur hover:bg-white/30"
+              title={`Show ${s.type === "movie" ? "films" : "shows"} like ${s.title}`}
+            >
+              <SparkIcon className="h-3 w-3" />
+              More like this
+            </button>
+          )}
         </div>
       </div>
     </div>
+  );
+}
+
+export function SparkIcon({ className }: { className: string }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" className={className} aria-hidden>
+      <path d="M10 2l1.8 5.2L17 9l-5.2 1.8L10 16l-1.8-5.2L3 9l5.2-1.8z" />
+    </svg>
   );
 }
 
@@ -86,10 +105,12 @@ export function PosterRow({
   title,
   items,
   onOpen,
+  onMoreLike,
 }: {
   title: string;
   items: Suggestion[];
   onOpen: (s: Suggestion) => void;
+  onMoreLike?: (s: Suggestion) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [edges, setEdges] = useState({ left: false, right: false });
@@ -125,7 +146,12 @@ export function PosterRow({
           className="no-scrollbar flex snap-x snap-mandatory scroll-px-4 gap-2.5 overflow-x-auto px-4 py-3 sm:scroll-px-8 sm:gap-3 sm:px-8"
         >
           {items.map((s) => (
-            <PosterCard key={s.key} s={s} onOpen={() => onOpen(s)} />
+            <PosterCard
+              key={s.key}
+              s={s}
+              onOpen={() => onOpen(s)}
+              onMoreLike={onMoreLike && (() => onMoreLike(s))}
+            />
           ))}
         </div>
         <Arrow dir="right" show={edges.right} onClick={() => page(1)} />
