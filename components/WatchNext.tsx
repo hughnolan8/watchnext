@@ -7,7 +7,7 @@ import { buildRows, type Row } from "@/lib/rows";
 import { similarTo, type LikeSource } from "@/lib/similar";
 import { load, save } from "@/lib/storage";
 import type { CatalogueView } from "@/lib/catalogue";
-import type { Account, ProviderInfo, Seed, Suggestion } from "@/lib/types";
+import type { Account, ProviderInfo, SearchResult, Seed, Suggestion } from "@/lib/types";
 import { AccountMenu } from "./AccountMenu";
 import { Filters } from "./Filters";
 import { PosterRow } from "./PosterRow";
@@ -138,6 +138,27 @@ export function WatchNext({
   const hero = like ? undefined : (visible.find((s) => s.backdrop) ?? visible[0]);
 
   const closeDetails = useCallback(() => setOpen(null), []);
+
+  // Search results open the same details pop-up, loaded on demand (they're not in the catalogue).
+  const [titleLoad, setTitleLoad] = useState<{ title: string; failed: boolean } | null>(null);
+  const [dismissSearch, setDismissSearch] = useState(0);
+  const loadReq = useRef(0);
+  const openSearchResult = (r: SearchResult) => {
+    const req = ++loadReq.current;
+    setTitleLoad({ title: r.title, failed: false });
+    fetch(`/api/title?type=${r.type}&id=${r.id}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      .then((s: Suggestion) => {
+        if (req !== loadReq.current) return;
+        setTitleLoad(null);
+        setOpen(s);
+      })
+      .catch(() => req === loadReq.current && setTitleLoad({ title: r.title, failed: true }));
+  };
+  const cancelTitleLoad = useCallback(() => {
+    loadReq.current++;
+    setTitleLoad(null);
+  }, []);
   const act = (fn: (s: Suggestion) => void) => () => {
     if (open) fn(open);
     setOpen(null);
@@ -152,7 +173,14 @@ export function WatchNext({
           Watch<span className="text-accent">Next</span>
         </h1>
         <div className="flex w-full items-center gap-3 sm:w-auto">
-          {hasTmdb && <SearchBox subscriptions={subscriptions} />}
+          {hasTmdb && (
+            <SearchBox
+              subscriptions={subscriptions}
+              onOpenTitle={openSearchResult}
+              detailsOpen={!!open || !!titleLoad}
+              dismiss={dismissSearch}
+            />
+          )}
           {stored && <Filters value={filters} onChange={setFilters} matchCount={visible.length} />}
           <AccountMenu user={user} />
         </div>
@@ -259,9 +287,14 @@ export function WatchNext({
           onLoved={act(loved)}
           onSeen={act(hide)}
           onNotForMe={act(hide)}
-          onMoreLike={() => moreLike(open)}
+          onMoreLike={() => {
+            setDismissSearch((n) => n + 1);
+            moreLike(open);
+          }}
         />
       )}
+
+      {titleLoad && <TitleLoading title={titleLoad.title} failed={titleLoad.failed} onClose={cancelTitleLoad} />}
 
       <footer className={`mt-16 border-t border-line pt-6 text-xs text-muted ${pad}`}>
         Streaming data from JustWatch via TMDB. IMDb ratings via OMDb. Letterboxd ratings from public film pages.
@@ -304,6 +337,32 @@ function Hero({ s, onMore, className }: { s: Suggestion; onMore: () => void; cla
             More info
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Shown while a search result's details load. */
+function TitleLoading({ title, failed, onClose }: { title: string; failed: boolean; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-6" role="status">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} aria-hidden />
+      <div className="relative rounded-2xl border border-line bg-surface px-6 py-5 text-sm shadow-2xl">
+        {failed ? (
+          <>
+            <p>Couldn&apos;t load {title}. Try again in a moment.</p>
+            <button type="button" onClick={onClose} className="mt-3 text-accent hover:underline">
+              Close
+            </button>
+          </>
+        ) : (
+          <p className="text-muted">Loading {title}…</p>
+        )}
       </div>
     </div>
   );
