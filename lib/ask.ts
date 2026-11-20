@@ -11,6 +11,7 @@ import type { AskResult, MediaType, Suggestion } from "./types";
 // every rating comes from what's already stored, so this costs no OMDb lookups.
 
 const MODEL = process.env.ANTHROPIC_MODEL?.trim() || "claude-opus-5-5";
+const HAS_FALLBACK = /^claude-(opus-5|fable-5|mythos-5|sonnet-5-5)/.test(MODEL);
 const GENRE_KEYS = GENRES.map((g) => g.key);
 const SORTS = ["best", "imdb", "letterboxd", "newest", "oldest", "shortest", "longest", "hidden_gems", "popular"] as const;
 type Sort = (typeof SORTS)[number];
@@ -126,9 +127,9 @@ async function askJson<T>(system: string, user: string, schema: Record<string, u
   const res = await anthropic().beta.messages.create({
     model: MODEL,
     max_tokens: maxTokens,
-    // Refusals are very unlikely for film questions, but if one happens the API retries on a fallback model.
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
+    // Refusals are very unlikely for film questions, but if one happens the API retries on a
+    // fallback model. Only some models support this (not Haiku), so it's left off for the rest.
+    ...(HAS_FALLBACK ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
     system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: user }],
     output_config: { effort: "low", format: { type: "json_schema", schema } },
