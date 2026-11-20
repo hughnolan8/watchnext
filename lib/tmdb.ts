@@ -126,15 +126,27 @@ export async function getProviders(region: string): Promise<Provider[]> {
   return [...byId.values()].sort((a, b) => a.priority - b.priority);
 }
 
-export async function searchTitles(query: string) {
-  const data = await tmdb<{ results: TmdbListItem[] }>(
-    "/search/multi",
-    { query, include_adult: "false" },
-    60 * 60,
+/** Films and shows matching `query`: the top 8 for the quick dropdown, or up to `limit` across several pages. */
+export async function searchTitles(query: string, limit = 8) {
+  const pages = Math.min(5, Math.ceil(limit / 20));
+  const data = await Promise.all(
+    Array.from({ length: pages }, (_, i) =>
+      tmdb<{ results: TmdbListItem[] }>(
+        "/search/multi",
+        { query, include_adult: "false", page: i + 1 },
+        60 * 60,
+      ).catch((e) => (i === 0 ? Promise.reject(e) : { results: [] as TmdbListItem[] })),
+    ),
   );
-  return data.results
+  const seen = new Set<string>();
+  return data
+    .flatMap((d) => d.results)
     .filter((r) => r.media_type === "movie" || r.media_type === "tv")
-    .slice(0, 8)
+    .filter((r) => {
+      const k = `${r.media_type}:${r.id}`;
+      return seen.has(k) ? false : (seen.add(k), true);
+    })
+    .slice(0, limit)
     .map((r) => ({
       id: r.id,
       type: r.media_type as MediaType,
@@ -164,8 +176,8 @@ function streamingFrom(wp: RegionProviders | undefined): Provider[] {
 }
 
 /** Search results with the services each title streams on in `region`. */
-export async function searchWhereToWatch(query: string, region: string) {
-  const results = await searchTitles(query);
+export async function searchWhereToWatch(query: string, region: string, limit = 8) {
+  const results = await searchTitles(query, limit);
   return Promise.all(
     results.map(async (r) => {
       const wp = await tmdb<{ results: Record<string, RegionProviders> }>(
