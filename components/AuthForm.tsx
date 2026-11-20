@@ -48,7 +48,7 @@ export function AuthForm({ mode, next }: { mode: "login" | "signup"; next?: stri
     "w-full rounded-lg border border-line bg-surface-2 px-3 py-2.5 outline-none placeholder:text-muted focus:border-accent";
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-4 py-12">
+    <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center px-4 py-12">
       <Link href="/" className="mb-8 font-display text-3xl font-bold tracking-tight">
         Watch<span className="text-accent">Next</span>
       </Link>

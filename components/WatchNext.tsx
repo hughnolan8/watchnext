@@ -115,8 +115,8 @@ export function WatchNext({
   const pad = "px-4 sm:px-8";
 
   return (
-    <div className="pb-24">
-      <header className={`relative z-40 sm:sticky sm:top-0 flex flex-wrap items-center justify-between gap-4 bg-gradient-to-b from-bg via-bg/90 to-bg/0 py-4 ${pad}`}>
+    <div className="pb-[calc(6rem+env(safe-area-inset-bottom))]">
+      <header className={`relative z-40 sm:sticky sm:top-[env(safe-area-inset-top)] flex flex-wrap items-center justify-between gap-4 bg-gradient-to-b from-bg via-bg/90 to-bg/0 py-4 ${pad}`}>
         <div className="flex items-baseline gap-4">
           <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
             Watch<span className="text-accent">Next</span>

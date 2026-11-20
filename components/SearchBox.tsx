@@ -82,7 +82,7 @@ export function SearchBox({ subscriptions }: { subscriptions: ProviderInfo[] }) 
       </label>
 
       {showPanel && (
-        <div className="absolute right-0 z-50 mt-2 max-h-[70vh] w-full overflow-y-auto rounded-xl border border-line bg-surface shadow-2xl sm:w-[26rem]">
+        <div className="absolute right-0 z-50 mt-2 max-h-[70dvh] w-full overflow-y-auto rounded-xl border border-line bg-surface shadow-2xl sm:w-[26rem]">
           {status === "loading" && !results.length && <p className="p-4 text-sm text-muted">Searching…</p>}
           {status === "error" && <p className="p-4 text-sm text-bad">Search isn&apos;t working right now. Try again in a moment.</p>}
           {status === "done" && !results.length && <p className="p-4 text-sm text-muted">No films or shows found.</p>}

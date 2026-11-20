@@ -116,9 +116,9 @@ export function TitleDetails({
         aria-modal="true"
         aria-labelledby="title-details"
         tabIndex={-1}
-        className="relative max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-t-2xl border border-line bg-surface shadow-2xl outline-none sm:rounded-2xl"
+        className="relative max-h-[92dvh] w-full max-w-3xl overflow-y-auto overscroll-contain rounded-t-2xl border border-line bg-surface shadow-2xl outline-none sm:rounded-2xl"
       >
-        <div className="relative aspect-video max-h-[50vh] w-full overflow-hidden bg-black">
+        <div className="relative aspect-video max-h-[50dvh] w-full overflow-hidden bg-black">
           {image && (
             <img
               src={image}
@@ -177,7 +177,7 @@ export function TitleDetails({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 border-t border-line p-5 text-sm sm:px-7">
+        <div className="grid grid-cols-3 gap-2 border-t border-line px-5 pt-5 pb-safe-5 text-sm sm:px-7">
           <button type="button" onClick={onLoved} className="rounded-lg border border-line py-2 hover:border-good hover:text-good" title="Seen it and loved it: use it to steer suggestions">
             ♥ Loved it
           </button>

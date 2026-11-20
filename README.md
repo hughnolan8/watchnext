@@ -28,6 +28,16 @@ Letterboxd needs no key. It has no public API, so the server reads the average r
 
 The repo deploys to Vercel as a standard Next.js project; every push to `main` goes to production and every other branch gets a preview URL. In the Vercel project, add the **Neon** integration (Storage tab) so `DATABASE_URL` is set, and add `TMDB_API_KEY`, `OMDB_API_KEY` and `DEFAULT_REGION` under Settings → Environment Variables.
 
+## Installing the app (iPhone, iPad, Mac)
+
+WatchNext is a progressive web app, so it installs from the browser and opens in its own window with no address bar.
+
+- **iPhone / iPad (Safari):** Share → **Add to Home Screen**. The app shows a hint with these steps the first time.
+- **Mac (Safari 17+):** File → **Add to Dock**.
+- **Mac / PC (Chrome or Edge):** the **Install** button the app offers, or the install icon in the address bar.
+
+The pieces: [app/manifest.ts](app/manifest.ts) (name, icons, colours), the iOS tags and safe-area viewport in [app/layout.tsx](app/layout.tsx), and [public/sw.js](public/sw.js), a service worker registered by [components/PwaSetup.tsx](components/PwaSetup.tsx). It caches build assets and posters, keeps the last copy of each page for offline use, and shows [public/offline.html](public/offline.html) otherwise. API calls are never cached, and signing out clears the saved pages. The service worker only registers in production builds (`npm run build && npm start`). After changing it, bump `VERSION` in `sw.js` so installed apps drop old caches.
+
 ## Accounts and subscriptions
 
 You sign up with an email and password. Each account stores the streaming services you subscribe to, so they follow you to any device. New accounts go straight to picking their services; you can change them any time from **Account** (top right), along with your name and region. Subscriptions are saved per region, because service IDs differ by country.
