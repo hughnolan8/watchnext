@@ -45,3 +45,8 @@ next-env.d.ts
 
 # local database (accounts, subscriptions)
 /data/
+
+# personal Claude Code settings (shared ones live in CLAUDE.md and .claude/)
+CLAUDE.local.md
+.claude/settings.local.json
+.claude/worktrees/
