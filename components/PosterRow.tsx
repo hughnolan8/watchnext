@@ -28,10 +28,20 @@ function Arrow({ dir, onClick, show }: { dir: "left" | "right"; onClick: () => v
   );
 }
 
-function PosterCard({ s, onOpen, onMoreLike }: { s: Suggestion; onOpen: () => void; onMoreLike?: () => void }) {
+export function PosterCard({
+  s,
+  onOpen,
+  onMoreLike,
+  className = "w-36 shrink-0 snap-start sm:w-40 lg:w-44",
+}: {
+  s: Suggestion;
+  onOpen: () => void;
+  onMoreLike?: () => void;
+  className?: string;
+}) {
   const first = watchLinks(s)[0];
   return (
-    <div className="group/card relative w-36 shrink-0 snap-start sm:w-40 lg:w-44">
+    <div className={`group/card relative ${className}`}>
       <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-surface-2 ring-1 ring-line transition duration-200 group-hover/card:scale-[1.04] group-hover/card:ring-accent/60 group-hover/card:shadow-2xl">
         {s.poster ? (
           <img src={s.poster} alt="" loading="lazy" className="h-full w-full object-cover" />
