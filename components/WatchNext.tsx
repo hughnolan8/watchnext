@@ -168,7 +168,7 @@ export function WatchNext({
         <h1 className="w-full text-center font-display text-2xl font-bold tracking-tight sm:w-auto sm:text-left sm:text-3xl">
           Watch<span className="text-accent">Next</span>
         </h1>
-        <div className="flex w-full items-center gap-3 sm:w-auto">
+        <div className="flex w-full flex-wrap items-center justify-between gap-3 sm:w-auto sm:flex-nowrap">
           {hasTmdb && (
             <SearchBox
               subscriptions={subscriptions}
